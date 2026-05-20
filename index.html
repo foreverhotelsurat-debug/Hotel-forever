@@ -97,6 +97,8 @@
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 body { font-family: var(--fs-sans); background: var(--white); color: var(--dark); overflow-x: hidden; -webkit-font-smoothing: antialiased; }
 img { display: block; max-width: 100%; height: auto; }
+/* Hero image needs full height — override the global height:auto */
+.hero-img img { height: 100% !important; max-width: none; }
 button { font-family: var(--fs-sans); cursor: pointer; }
 a { text-decoration: none; color: inherit; }
 ul { list-style: none; }
@@ -831,7 +833,7 @@ tbody td { padding: 12px 14px; color: var(--mid); font-weight: 300; vertical-ali
   <div class="nav-inner">
     <a class="nav-logo" href="/" aria-label="Forever Hotel Surat Homepage">
       <div class="logo-img-wrap" id="logoWrap">
-        <img src="forever.png" alt="Forever Hotel Logo"/>
+        <img src="forever.png" alt="Forever Hotel Logo" width="48" height="48"/>
         <span class="logo-letter" id="logoFallback">F</span>
       </div>
       <div class="logo-text">
@@ -908,7 +910,7 @@ tbody td { padding: 12px 14px; color: var(--mid); font-weight: 300; vertical-ali
   </div>
   <div class="hero-right" aria-hidden="true">
     <div class="hero-img">
-      <img src="https://images.unsplash.com/photo-1455587734955-081b22074882?w=900&q=80" alt="Forever Hotel Surat" loading="eager" fetchpriority="high"/>
+      <img src="https://images.unsplash.com/photo-1455587734955-081b22074882?w=900&q=80" alt="Forever Hotel Surat" loading="eager" fetchpriority="high" width="900" height="1200"/>
     </div>
     <div class="hero-stats">
       <div class="stat-item"><span class="stat-num">4.8</span><span class="stat-lbl">Guest Rating</span></div>
@@ -937,7 +939,7 @@ tbody td { padding: 12px 14px; color: var(--mid); font-weight: 300; vertical-ali
   <div class="section-inner">
     <div class="about-grid">
       <div class="fade-up" id="about-img-col">
-        <img class="about-img-main" src="https://images.unsplash.com/photo-1564501049412-61c2a3083791?w=700&q=80" alt="Forever Hotel lobby" loading="lazy"/>
+        <img class="about-img-main" src="https://images.unsplash.com/photo-1564501049412-61c2a3083791?w=700&q=80" alt="Forever Hotel lobby" loading="lazy" width="700" height="875"/>
       </div>
       <div class="fade-up">
         <div class="sec-label"><span>Our Story</span></div>
@@ -973,10 +975,10 @@ tbody td { padding: 12px 14px; color: var(--mid); font-weight: 300; vertical-ali
         <button class="btn btn-dark" style="margin-top:32px;font-size:11px;padding:15px 32px;" onclick="openBookingModal()">Reserve a Room →</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <img src="https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=500&q=80" alt="AC room at Forever Hotel Surat" loading="lazy" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);"/>
-        <img src="https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=500&q=80" alt="Forever Hotel Surat room interior" loading="lazy" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);margin-top:24px;"/>
-        <img src="https://images.unsplash.com/photo-1611892440504-42a792e24d32?w=500&q=80" alt="Clean comfortable room Forever Hotel" loading="lazy" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);margin-top:-24px;"/>
-        <img src="https://images.unsplash.com/photo-1540518614846-7eded433c457?w=500&q=80" alt="Forever Hotel room bathroom Surat" loading="lazy" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);"/>
+        <img src="https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=500&q=80" alt="AC room at Forever Hotel Surat" loading="lazy" width="500" height="375" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);"/>
+        <img src="https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=500&q=80" alt="Forever Hotel Surat room interior" loading="lazy" width="500" height="375" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);margin-top:24px;"/>
+        <img src="https://images.unsplash.com/photo-1611892440504-42a792e24d32?w=500&q=80" alt="Clean comfortable room Forever Hotel" loading="lazy" width="500" height="375" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);margin-top:-24px;"/>
+        <img src="https://images.unsplash.com/photo-1540518614846-7eded433c457?w=500&q=80" alt="Forever Hotel room bathroom Surat" loading="lazy" width="500" height="375" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);"/>
       </div>
     </div>
   </div>
