@@ -3508,17 +3508,19 @@ document.querySelectorAll('.fade-up').forEach(el => _obs.observe(el));
 ══════════════════════════════════════ */
 let _xlRows=[], _xlHeaders=[];
 const XL_FIELDS=[
-  {key:'origId',  label:'Booking # (existing)',   required:false},
-  {key:'name',    label:'Guest Name *',            required:true},
-  {key:'phone',   label:'Phone / Mobile',          required:false},
-  {key:'persons', label:'Person / Pax count',      required:false},
-  {key:'room',    label:'Room No. (No.)',           required:false},
-  {key:'checkin', label:'Check-in Date *',         required:true},
-  {key:'checkout',label:'Check-out Date *',        required:true},
-  {key:'amount',  label:'Amount (₹)',              required:false},
-  {key:'payment', label:'Mode of Payment',         required:false},
-  {key:'date',    label:'Entry Date',              required:false},
-  {key:'time',    label:'Entry Time',              required:false},
+  {key:'origId',   label:'Booking # ( # )',          required:false},
+  {key:'room',     label:'Room No. ( NO )',           required:false},
+  {key:'name',     label:'Guest Name ( CONTACT NO )',  required:true},
+  {key:'phone',    label:'Phone ( CONTACT NO 2nd ) ', required:false},
+  {key:'persons',  label:'Person / Pax ( PERSON )',   required:false},
+  {key:'amount',   label:'Rent Amount ( RENT )',       required:false},
+  {key:'cash',     label:'Cash Amount ( CASH )',       required:false},
+  {key:'pending',  label:'Pending Amount ( PENDING )',required:false},
+  {key:'bank',     label:'Bank/UPI Amount ( BANK )',  required:false},
+  {key:'date',     label:'Entry Date ( DATE ) *',     required:true},
+  {key:'duration', label:'Duration ( TIME )',         required:false},
+  {key:'checkin',  label:'Check-in Time ( C/IN ) *',  required:true},
+  {key:'checkout', label:'Check-out Time ( C/OUT ) *',required:true},
 ];
 function openExcelImport(){
   ['xlMappingSection','xlProgressSection','xlResultSection'].forEach(id=>document.getElementById(id).style.display='none');
@@ -3536,11 +3538,24 @@ function xlProcessFile(file){
   const r=new FileReader();
   r.onload=function(e){
     try{
-      const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+      /* Read with cellDates:false so time-only cells come as decimal fractions
+         (e.g. 0.458 for 11:00), not as JS Date with year 1899.
+         We handle all date/time parsing ourselves below. */
+      const wb=XLSX.read(e.target.result,{type:'array',cellDates:false});
       const ws=wb.Sheets[wb.SheetNames[0]];
-      const json=XLSX.utils.sheet_to_json(ws,{defval:''});
-      if(!json.length){toast('File is empty','error');return;}
-      _xlRows=json;_xlHeaders=Object.keys(json[0]);xlShowMapping();
+      /* raw:false → formatted strings; we re-parse them ourselves */
+      const json=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
+      /* Filter out header-repeat rows and empty rows */
+      const dataRows=json.filter(row=>{
+        const vals=Object.values(row);
+        const hasData=vals.some(v=>v!==null&&v!==''&&v!==undefined);
+        /* Skip rows where the first non-empty cell looks like a column header */
+        const first=String(vals[0]||'').trim().toLowerCase();
+        const isHeader=(first==='#'||first==='no'||first==='sr'||first==='date');
+        return hasData&&!isHeader;
+      });
+      if(!dataRows.length){toast('No data rows found in file','error');return;}
+      _xlRows=dataRows;_xlHeaders=Object.keys(json[0]);xlShowMapping();
     }catch(err){toast('Could not read file: '+err.message,'error');}
   };
   r.readAsArrayBuffer(file);
@@ -3548,47 +3563,127 @@ function xlProcessFile(file){
 function xlShowMapping(){
   document.getElementById('xlDropZone').style.display='none';
   const autoMap={};
-  const norm=h=>h.toLowerCase().replace(/[^a-z0-9]/g,'');
-  _xlHeaders.forEach(h=>{
+  const norm=h=>String(h).toLowerCase().replace(/[^a-z0-9]/g,'');
+  /* Build an ordered list of headers so we can map by position for duplicate names */
+  const hList=_xlHeaders;
+  /* Track which headers have already been auto-mapped to avoid double-use */
+  const used=new Set();
+  hList.forEach((h,i)=>{
     const n=norm(h);
-    if(!autoMap.origId   &&(n==='#'||n==='sr'||n==='srno'||n==='sno'||n.includes('bookingid')))autoMap.origId=h;
-    if(!autoMap.name     &&(n.includes('guest')||n==='name'||n==='guestname'||n==='customername'))autoMap.name=h;
-    if(!autoMap.phone    &&(n.includes('phone')||n.includes('mobile')||n.includes('contact')))autoMap.phone=h;
-    if(!autoMap.persons  &&(n==='person'||n==='persons'||n==='pax'||n.includes('noof')||n==='count'))autoMap.persons=h;
-    if(!autoMap.room     &&(n==='no'||n==='roomno'||n==='room'||n==='rno'))autoMap.room=h;
-    if(!autoMap.checkin  &&(n==='checkin'||n==='checkindate'||n==='arrival'||n==='from'))autoMap.checkin=h;
-    if(!autoMap.checkout &&(n==='checkout'||n==='checkoutdate'||n==='departure'||n==='to'))autoMap.checkout=h;
-    if(!autoMap.amount   &&(n==='amount'||n==='total'||n==='price'||n==='rate'||n==='billamount'))autoMap.amount=h;
-    if(!autoMap.payment  &&(n.includes('mode')||n.includes('payment')||n==='paymode'))autoMap.payment=h;
-    if(!autoMap.date     &&(n==='date'||n==='entrydate'||n==='bookingdate'))autoMap.date=h;
-    if(!autoMap.time     &&(n==='time'||n==='entrytime'||n==='bookingtime'))autoMap.time=h;
+    /* Booking # → first column '#' */
+    if(!autoMap.origId&&!used.has(h)&&(n==='#'||n==='sr'||n==='srno'||n==='bookingid')){autoMap.origId=h;used.add(h);}
+    /* Room No → 'NO' */
+    if(!autoMap.room&&!used.has(h)&&(n==='no'||n==='roomno'||n==='room')){autoMap.room=h;used.add(h);}
+    /* Guest Name → first 'CONTACT NO' column (index ~2) */
+    if(!autoMap.name&&!used.has(h)&&(n==='contactno'||n.includes('contact')||n==='name'||n==='guestname')){autoMap.name=h;used.add(h);}
+    /* Phone → second 'CONTACT NO' column */
+    if(!autoMap.phone&&!used.has(h)&&(n==='contactno'||n.includes('contact')||n.includes('phone')||n.includes('mobile'))){autoMap.phone=h;used.add(h);}
+    /* Person count */
+    if(!autoMap.persons&&!used.has(h)&&(n==='person'||n==='persons'||n==='pax'||n==='noof')){autoMap.persons=h;used.add(h);}
+    /* Rent / total amount */
+    if(!autoMap.amount&&!used.has(h)&&(n==='rent'||n==='amount'||n==='total'||n==='rate'||n==='price')){autoMap.amount=h;used.add(h);}
+    /* Cash */
+    if(!autoMap.cash&&!used.has(h)&&n==='cash'){autoMap.cash=h;used.add(h);}
+    /* Pending */
+    if(!autoMap.pending&&!used.has(h)&&n==='pending'){autoMap.pending=h;used.add(h);}
+    /* Bank / UPI */
+    if(!autoMap.bank&&!used.has(h)&&(n==='bank'||n==='upi'||n==='online')){autoMap.bank=h;used.add(h);}
+    /* Entry Date */
+    if(!autoMap.date&&!used.has(h)&&(n==='date'||n==='entrydate'||n==='bookingdate')){autoMap.date=h;used.add(h);}
+    /* Duration label like '2hr' */
+    if(!autoMap.duration&&!used.has(h)&&(n==='time'||n==='duration'||n==='hrs')){autoMap.duration=h;used.add(h);}
+    /* C/IN check-in time */
+    if(!autoMap.checkin&&!used.has(h)&&(n==='cin'||n==='checkin'||n==='arrival'||n==='from')){autoMap.checkin=h;used.add(h);}
+    /* C/OUT check-out time */
+    if(!autoMap.checkout&&!used.has(h)&&(n==='cout'||n==='checkout'||n==='departure'||n==='to')){autoMap.checkout=h;used.add(h);}
   });
   const grid=document.getElementById('xlMappingGrid');
   grid.innerHTML=XL_FIELDS.map(f=>`<div style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11px;font-weight:600;color:var(--dark);">${f.label}</label><select id="xlmap_${f.key}" style="font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;"><option value="">— Skip —</option>${_xlHeaders.map(h=>`<option value="${h}"${autoMap[f.key]===h?' selected':''}>${h}</option>`).join('')}</select></div>`).join('');
-  const prev=_xlRows.slice(0,3);const pc=_xlHeaders.slice(0,7);
+  /* Show ALL columns in preview */
+  const prev=_xlRows.slice(0,3);
+  const pc=_xlHeaders;
   const tbl=`<div style="overflow-x:auto;margin-top:8px;"><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr>${pc.map(h=>`<th style="padding:4px 6px;background:#f5f5f0;border:1px solid #e0ddd5;white-space:nowrap;">${h}</th>`).join('')}</tr></thead><tbody>${prev.map(r=>`<tr>${pc.map(c=>`<td style="padding:4px 6px;border:1px solid #e0ddd5;white-space:nowrap;">${r[c]??''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
-  document.getElementById('xlPreviewInfo').innerHTML=`✅ <strong>${_xlRows.length} rows</strong> found. Preview:${tbl}`;
+  document.getElementById('xlPreviewInfo').innerHTML=`✅ <strong>${_xlRows.length} rows</strong> found. Preview (all columns):${tbl}`;
   document.getElementById('xlMappingSection').style.display='block';
 }
 function xlGetMapping(){const map={};XL_FIELDS.forEach(f=>{const el=document.getElementById('xlmap_'+f.key);if(el&&el.value)map[f.key]=el.value;});return map;}
+
+/* Parse a date-only cell → 'YYYY-MM-DD'
+   Handles: JS Date objects, Excel serial numbers, 'DD/MM/YYYY', 'YYYY-MM-DD', text dates */
 function xlParseDate(val){
-  if(!val)return null;
-  if(val instanceof Date){if(isNaN(val))return null;return `${val.getFullYear()}-${String(val.getMonth()+1).padStart(2,'0')}-${String(val.getDate()).padStart(2,'0')}`;}
+  if(val===null||val===undefined||val==='')return null;
+  /* JS Date object (from cellDates:true mode, kept for safety) */
+  if(val instanceof Date){
+    if(isNaN(val.getTime()))return null;
+    /* Reject year 1899/1900 which means Excel time-only serial */
+    if(val.getFullYear()<1970)return null;
+    return `${val.getFullYear()}-${String(val.getMonth()+1).padStart(2,'0')}-${String(val.getDate()).padStart(2,'0')}`;
+  }
   const s=String(val).trim();
+  if(!s)return null;
+  /* ISO YYYY-MM-DD */
   const iso=s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
   if(iso)return `${iso[1]}-${iso[2].padStart(2,'0')}-${iso[3].padStart(2,'0')}`;
+  /* DD/MM/YYYY or DD-MM-YYYY */
   const dmy=s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})/);
   if(dmy){const yr=dmy[3].length===2?'20'+dmy[3]:dmy[3];return `${yr}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;}
-  const d=new Date(s);if(!isNaN(d))return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  /* Pure Excel numeric serial (may come as string after raw:false) */
+  const num=Number(s);
+  if(!isNaN(num)&&num>1&&num<100000){
+    /* Excel serial: days since 1900-01-00 (with Lotus 1-2-3 leap-year bug) */
+    const d=new Date(Math.round((num-25569)*86400*1000));
+    if(!isNaN(d.getTime())&&d.getFullYear()>1970)
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  /* Natural language / other formats */
+  const d=new Date(s);
+  if(!isNaN(d.getTime())&&d.getFullYear()>1970)
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   return null;
 }
-function xlMapPayment(val){
-  if(!val)return'pending';const v=String(val).toLowerCase().trim();
-  if(v.includes('cash'))return'cash';
-  if(v.includes('bank')||v.includes('upi')||v.includes('online')||v.includes('neft')||v.includes('transfer')||v.includes('gpay')||v.includes('paytm')||v.includes('phonepe'))return'bank';
-  if(v.includes('card'))return'card';
-  if(v.includes('pending'))return'pending';
-  return v;
+
+/* Parse a time-only cell → 'HH:MM'
+   Handles: 'HH:MM', 'HH:MM:SS', 'H:MM AM/PM', Excel decimal fraction strings like '0.4583' */
+function xlParseTime(val){
+  if(val===null||val===undefined||val==='')return null;
+  const s=String(val).trim();
+  if(!s)return null;
+  /* HH:MM or HH:MM:SS */
+  const hms=s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?(?:\s*(am|pm))?$/i);
+  if(hms){
+    let h=parseInt(hms[1]),m=parseInt(hms[2]);
+    const ampm=(hms[3]||'').toLowerCase();
+    if(ampm==='pm'&&h<12)h+=12;
+    if(ampm==='am'&&h===12)h=0;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  }
+  /* Excel time fraction: 0.0–0.999... representing fraction of 24h */
+  const frac=parseFloat(s);
+  if(!isNaN(frac)&&frac>=0&&frac<1){
+    const totalMin=Math.round(frac*24*60);
+    const h=Math.floor(totalMin/60)%24;
+    const m=totalMin%60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  }
+  return null;
+}
+
+/* Combine a date string 'YYYY-MM-DD' and a time string 'HH:MM' → 'YYYY-MM-DD' (date only for checkin/checkout storage) */
+function xlCombineDateTime(dateStr,timeStr){
+  if(!dateStr)return null;
+  return dateStr; /* store date portion; time is kept in checkinTime/checkoutTime */
+}
+
+function xlMapPayment(cash,bank,pending){
+  /* Determine payment mode from the three money columns */
+  const c=parseFloat(String(cash||'').replace(/[^0-9.]/g,''))||0;
+  const b=parseFloat(String(bank||'').replace(/[^0-9.]/g,''))||0;
+  const p=parseFloat(String(pending||'').replace(/[^0-9.]/g,''))||0;
+  if(c>0&&b>0)return'split';
+  if(b>0)return'bank';
+  if(c>0)return'cash';
+  if(p>0)return'pending';
+  return'pending';
 }
 function xlGenFHId(origId){
   const s=String(origId||'').trim();
@@ -3607,30 +3702,94 @@ async function xlStartImport(){
   let imported=0,skipped=0,failed=0;
   const validBookings=[];
   for(const row of _xlRows){
-    const checkin=xlParseDate(map.checkin?row[map.checkin]:null);
-    const checkout=xlParseDate(map.checkout?row[map.checkout]:null);
+    /* ── Date: from DATE column ── */
+    const entryDate=xlParseDate(map.date?row[map.date]:null);
+    /* ── Times: C/IN and C/OUT ── */
+    const cinRaw=map.checkin?row[map.checkin]:null;
+    const coutRaw=map.checkout?row[map.checkout]:null;
+    const cinTime=xlParseTime(cinRaw);
+    const coutTime=xlParseTime(coutRaw);
+    /* The actual check-in date = entry date; check-out date = same day (short stay)
+       unless checkout time < checkin time → means it spilled past midnight → +1 day */
+    let checkinDate=entryDate;
+    let checkoutDate=entryDate;
+    if(cinTime&&coutTime&&checkinDate){
+      const [ch,cm]=cinTime.split(':').map(Number);
+      const [oh,om]=coutTime.split(':').map(Number);
+      if(oh*60+om < ch*60+cm){
+        /* Checkout is next day */
+        const d=new Date(checkinDate+'T00:00:00');
+        d.setDate(d.getDate()+1);
+        checkoutDate=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      }
+    }
+    /* Guest name */
     const name=map.name?String(row[map.name]||'').trim():'';
-    if(!name||!checkin||!checkout){skipped++;continue;}
-    const amtRaw=map.amount?row[map.amount]:null;
-    const amount=(amtRaw!==null&&amtRaw!=='')?parseFloat(String(amtRaw).replace(/[^0-9.]/g,''))||null:null;
+    /* Skip rows without name or entry date */
+    if(!name||!checkinDate){skipped++;continue;}
+    /* If no time info at all, still import with date-only */
+    const checkin=checkinDate;
+    const checkout=checkoutDate||checkinDate;
+    /* Amount columns */
+    const rentRaw=map.amount?row[map.amount]:null;
+    const cashRaw=map.cash?row[map.cash]:null;
+    const bankRaw=map.bank?row[map.bank]:null;
+    const pendingRaw=map.pending?row[map.pending]:null;
+    const rentAmt=parseFloat(String(rentRaw||'').replace(/[^0-9.]/g,''))||0;
+    const cashAmt=parseFloat(String(cashRaw||'').replace(/[^0-9.]/g,''))||0;
+    const bankAmt=parseFloat(String(bankRaw||'').replace(/[^0-9.]/g,''))||0;
+    const pendAmt=parseFloat(String(pendingRaw||'').replace(/[^0-9.]/g,''))||0;
+    /* Total amount = rent (or cash+bank if rent is blank) */
+    const amount=rentAmt||(cashAmt+bankAmt)||null;
+    const amountReceived=(cashAmt+bankAmt)||rentAmt||null;
+    const payMode=xlMapPayment(cashRaw,bankRaw,pendingRaw);
     const paxRaw=map.persons?String(row[map.persons]||'').trim():'';
     const paxNum=parseInt(paxRaw)||1;
     const guests=paxNum>1?paxNum+' Guests':'1 Guest';
     const room=sanitize(map.room?String(row[map.room]||'').trim():'');
-    const payMode=xlMapPayment(map.payment?row[map.payment]:null);
-    const entryDate=xlParseDate(map.date?row[map.date]:null)||checkin;
-    const entryTime=map.time?String(row[map.time]||'').trim():'';
-    const createdAt=entryTime?`${entryDate}T${entryTime}`:entryDate;
+    const duration=map.duration?String(row[map.duration]||'').trim():'';
     const origId=map.origId?String(row[map.origId]||'').trim():'';
     const newFHId=xlGenFHId(origId);
-    validBookings.push({id:newFHId,origBookingRef:origId||null,name:sanitize(name),phone:sanitize(map.phone?String(row[map.phone]||'').trim():''),email:'',checkin,checkout,guests,room,roomType:'regular',idType:'',idNum:'',requests:room?`Room No: ${room}`:'',status:'checkedout',amountReceived:amount,paymentMode:payMode,amountEnteredBy:amount?'Excel Import':null,amountEnteredAt:amount?new Date().toISOString():null,source:'excel_import',importedAt:new Date().toISOString(),idPhotoUrl:null,idPhotoUrls:[],createdAt});
+    const phone=sanitize(map.phone?String(row[map.phone]||'').trim():'');
+    const createdAt=checkin+(cinTime?'T'+cinTime:'');
+    /* Build notes from duration + pending info */
+    let notes='';
+    if(duration)notes+=`Duration: ${duration}`;
+    if(pendAmt>0)notes+=(notes?', ':'')+`Pending: ₹${pendAmt}`;
+    validBookings.push({
+      id:newFHId,
+      origBookingRef:origId||null,
+      name:sanitize(name),
+      phone,
+      email:'',
+      checkin,
+      checkinTime:cinTime||'',
+      checkout,
+      checkoutTime:coutTime||'',
+      guests,
+      room,
+      roomType:'regular',
+      idType:'',idNum:'',
+      requests:(room?`Room No: ${room}`:'')+(notes?(room?' | ':'')+notes:''),
+      status:'checkedout',
+      amountReceived,
+      amountTotal:amount||null,
+      amountPending:pendAmt||null,
+      paymentMode:payMode,
+      amountEnteredBy:amount?'Excel Import':null,
+      amountEnteredAt:amount?new Date().toISOString():null,
+      source:'excel_import',
+      importedAt:new Date().toISOString(),
+      idPhotoUrl:null,idPhotoUrls:[],
+      createdAt
+    });
   }
   if(!validBookings.length){
     document.getElementById('xlProgressSection').style.display='none';
     document.getElementById('xlResultSection').style.display='block';
     document.getElementById('xlResultIcon').textContent='⚠️';
     document.getElementById('xlResultTitle').textContent='Nothing to import';
-    document.getElementById('xlResultDesc').textContent=`All ${skipped} rows skipped — missing Name, Check-in, or Check-out.`;
+    document.getElementById('xlResultDesc').textContent=`All ${skipped} rows skipped — missing Guest Name or Date.`;
     setBtnLoading('xlImportBtn',false);return;
   }
   const BATCH=20;const batches=[];
@@ -3661,7 +3820,7 @@ async function xlStartImport(){
   <div class="modal-box wide" style="max-width:680px;">
     <button class="modal-close" onclick="closeModal('excelImportModal')" aria-label="Close">✕</button>
     <h2 class="modal-h">📂 Import Old Bookings from Excel</h2>
-    <p class="modal-sub">Drag & drop your <strong>.xlsx / .xls</strong> file. Columns: Guest Name, Phone, Person, No. (Room), Check-in, Check-out, Amount, Mode of Payment, Date, Time.</p>
+    <p class="modal-sub">Drag & drop your <strong>.xlsx / .xls</strong> file. Supports your format: <strong>#, NO, CONTACT NO, PERSON, RENT, CASH, PENDING, BANK, DATE, TIME, C/IN, C/OUT</strong>. All columns will be auto-detected.</p>
     <div id="xlDropZone" style="border:2px dashed var(--gold);border-radius:12px;padding:40px 20px;text-align:center;cursor:pointer;background:var(--gold-pale);margin:18px 0;"
       ondragover="xlDragOver(event)" ondragleave="xlDragLeave(event)" ondrop="xlDrop(event)"
       onclick="document.getElementById('xlFileInput').click()">
