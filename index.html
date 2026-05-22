@@ -801,7 +801,6 @@ tbody td { padding: 12px 14px; color: var(--mid); font-weight: 300; vertical-ali
   #toastContainer { right: 12px; top: 70px; }
 }
 </style>
-  <!-- SheetJS for Excel import -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -1231,68 +1230,6 @@ tbody td { padding: 12px 14px; color: var(--mid); font-weight: 300; vertical-ali
 <!-- payPopup removed — payment entry is now inline inside the dashboard detail modal -->
 
 <!-- ════════════════════════════════════
-     EXCEL IMPORT MODAL
-════════════════════════════════════ -->
-<div class="modal-wrap" id="excelImportModal" role="dialog" aria-modal="true">
-  <div class="modal-box wide" style="max-width:680px;">
-    <button class="modal-close" onclick="closeModal('excelImportModal')" aria-label="Close import modal">✕</button>
-    <h2 class="modal-h">📂 Import Old Bookings from Excel</h2>
-    <p class="modal-sub">Drag & drop your Excel file or click to browse. Supports <strong>.xlsx</strong> and <strong>.xls</strong> files. All existing data is safe — this only adds new records.</p>
-
-    <!-- Drop Zone -->
-    <div id="xlDropZone" style="
-      border: 2px dashed var(--gold);
-      border-radius: 12px;
-      padding: 40px 20px;
-      text-align: center;
-      cursor: pointer;
-      transition: background .2s;
-      background: var(--gold-pale);
-      margin: 18px 0;
-    "
-      ondragover="xlDragOver(event)"
-      ondragleave="xlDragLeave(event)"
-      ondrop="xlDrop(event)"
-      onclick="document.getElementById('xlFileInput').click()"
-    >
-      <div style="font-size:42px;margin-bottom:10px;">📊</div>
-      <div style="font-size:15px;font-weight:600;color:var(--gold);margin-bottom:6px;">Drop your Excel file here</div>
-      <div style="font-size:12px;color:var(--light);">or click to browse — .xlsx / .xls supported</div>
-      <input type="file" id="xlFileInput" accept=".xlsx,.xls" style="display:none" onchange="xlFileChosen(event)"/>
-    </div>
-
-    <!-- Column Mapping -->
-    <div id="xlMappingSection" style="display:none;">
-      <div style="font-size:13px;font-weight:600;color:var(--dark);margin-bottom:10px;">📋 Map Your Excel Columns</div>
-      <p style="font-size:11px;color:var(--light);margin-bottom:14px;">We detected these columns in your file. Match them to booking fields — skip any you don't have.</p>
-      <div id="xlMappingGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;"></div>
-      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;font-size:12px;color:#166534;margin-bottom:14px;" id="xlPreviewInfo"></div>
-      <button class="btn btn-gold btn-block" id="xlImportBtn" onclick="xlStartImport()">
-        <span class="btn-text">🚀 Import Bookings</span>
-      </button>
-    </div>
-
-    <!-- Progress -->
-    <div id="xlProgressSection" style="display:none;text-align:center;padding:20px 0;">
-      <div style="font-size:32px;margin-bottom:12px;">⏳</div>
-      <div style="font-size:14px;font-weight:600;margin-bottom:8px;" id="xlProgressText">Importing...</div>
-      <div style="background:var(--border);border-radius:999px;height:8px;overflow:hidden;margin:0 auto;max-width:300px;">
-        <div id="xlProgressBar" style="height:100%;background:var(--gold);border-radius:999px;width:0%;transition:width .3s;"></div>
-      </div>
-      <div style="font-size:12px;color:var(--light);margin-top:8px;" id="xlProgressCount"></div>
-    </div>
-
-    <!-- Result -->
-    <div id="xlResultSection" style="display:none;text-align:center;padding:16px 0;">
-      <div style="font-size:40px;margin-bottom:10px;" id="xlResultIcon">✅</div>
-      <div style="font-size:16px;font-weight:600;margin-bottom:6px;" id="xlResultTitle"></div>
-      <div style="font-size:13px;color:var(--light);margin-bottom:18px;" id="xlResultDesc"></div>
-      <button class="btn btn-gold" onclick="closeModal('excelImportModal')">Done — View Bookings</button>
-    </div>
-  </div>
-</div>
-
-<!-- ════════════════════════════════════
      BOOKING DETAIL MODAL (Staff)
 ════════════════════════════════════ -->
 <div class="modal-wrap" id="detailModal" role="dialog" aria-modal="true">
@@ -1325,12 +1262,46 @@ tbody td { padding: 12px 14px; color: var(--mid); font-weight: 300; vertical-ali
       <div class="fg"><label>Phone *</label><input type="tel" id="ab_phone" maxlength="15"/></div>
     </div>
     <div class="fg"><label>Email</label><input type="email" id="ab_email" maxlength="100"/></div>
+    <!-- Check-in row: date + time -->
     <div class="fg-row">
-      <div class="fg"><label>Check-in *</label><input type="date" id="ab_in"/></div>
-      <div class="fg"><label>Check-out *</label><input type="date" id="ab_out"/></div>
+      <div class="fg">
+        <label>Check-in Date *</label>
+        <input type="date" id="ab_in"/>
+      </div>
+      <div class="fg">
+        <label>Check-in Time</label>
+        <input type="time" id="ab_in_time" value="12:00"/>
+      </div>
+    </div>
+    <!-- Check-out row: date + time -->
+    <div class="fg-row">
+      <div class="fg">
+        <label>Check-out Date *</label>
+        <input type="date" id="ab_out"/>
+      </div>
+      <div class="fg">
+        <label>Check-out Time</label>
+        <input type="time" id="ab_out_time" value="11:00"/>
+      </div>
+    </div>
+    <!-- Room Type (for dormitory / regular) -->
+    <div class="fg-row">
+      <div class="fg">
+        <label>Room Type</label>
+        <select id="ab_roomtype">
+          <option value="regular">Regular Room</option>
+          <option value="dormitory">Dormitory Bed</option>
+          <option value="suite">Suite</option>
+          <option value="deluxe">Deluxe Room</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Room No.</label>
+        <input type="text" id="ab_roomno" placeholder="e.g. 101, Bed-3" maxlength="20"/>
+      </div>
     </div>
     <div class="fg-row">
-      <div class="fg"><label>Guests</label><select id="ab_guests"><option>1 Guest</option><option>2 Guests</option><option>3 Guests</option><option>4 Guests</option></select></div>
+      <div class="fg"><label>Guests</label><select id="ab_guests"><option>1 Guest</option><option>2 Guests</option><option>3 Guests</option><option>4 Guests</option><option>5 Guests</option><option>6 Guests</option><option>7 Guests</option><option>8 Guests</option><option>10 Guests</option></select></div>
       <div class="fg"><label>ID Type</label><select id="ab_idtype"><option value="aadhaar">Aadhaar Card</option><option value="passport">Passport</option><option value="voter_id">Voter ID</option></select></div>
     </div>
     <div class="fg"><label>ID Number</label><input type="text" id="ab_idnum" maxlength="30"/></div>
@@ -1563,7 +1534,14 @@ function statusLabel(s) {
   return { pending: 'Pending', confirmed: 'Confirmed', checkedin: 'Checked In', checkedout: 'Checked Out', cancelled: 'Cancelled' }[s] || s;
 }
 function calcNights(ci, co) {
-  return Math.max(0, Math.round((new Date(co) - new Date(ci)) / 86400000));
+  if (!ci || !co) return 0;
+  const diff = Math.round((new Date(co.split('T')[0]) - new Date(ci.split('T')[0])) / 86400000);
+  return Math.max(0, diff);
+}
+function calcNightsLabel(ci, co) {
+  const n = calcNights(ci, co);
+  if (n === 0) return 'Same Day';
+  return n + ' night' + (n > 1 ? 's' : '');
 }
 
 /* ── Bookings cache ── */
@@ -2555,9 +2533,10 @@ async function openDashboard(user) {
       toast(`📋 New booking: ${newest?.name || 'Guest'} — ${fmtDate(newest?.checkin)}`, 'info', 6000);
     }
 
-    if (document.getElementById('panel-overview').classList.contains('active')) renderOverview();
-    if (document.getElementById('panel-bookings').classList.contains('active')) renderBookings();
-    if (document.getElementById('panel-payments').classList.contains('active')) renderPayments();
+    if (document.getElementById('panel-overview')?.classList.contains('active'))   renderOverview();
+    if (document.getElementById('panel-bookings')?.classList.contains('active'))   renderBookings();
+    if (document.getElementById('panel-payments')?.classList.contains('active'))   renderPayments();
+    if (document.getElementById('panel-analytics')?.classList.contains('active'))  renderAnalytics();
     // Update badge only — no floating popup
     checkPaymentPopup();
   });
@@ -2587,12 +2566,13 @@ function renderOverview() {
   const todayStr = now.toISOString().split('T')[0];
   const confirmedAll = _bookingsCache.filter(b => b.status !== 'cancelled');
   const thisMonth = confirmedAll.filter(b => {
-    const d = new Date(b.checkin);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    const d = _safeDate(b.checkin);
+    return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });
-  const todayCheckins = confirmedAll.filter(b => b.checkin === todayStr);
+  // Compare only date portion (first 10 chars) — handles "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM"
+  const todayCheckins = confirmedAll.filter(b => b.checkin && String(b.checkin).slice(0, 10) === todayStr);
   const pending = _bookingsCache.filter(b => b.amountReceived === null && b.status !== 'cancelled');
-  const monthRev = thisMonth.reduce((s, b) => s + (b.amountReceived || 0), 0);
+  const monthRev = thisMonth.reduce((s, b) => s + (Number(b.amountReceived) || 0), 0);
 
   document.getElementById('k_month').textContent = thisMonth.length;
   document.getElementById('k_today').textContent = todayCheckins.length;
@@ -2866,9 +2846,10 @@ function viewBooking(docId) {
         ['Guest Name', sanitize(b.name)],
         ['Phone', sanitize(b.phone)],
         ['Email', sanitize(b.email || '—')],
+        ['Room Type', b.roomType ? (b.roomType.charAt(0).toUpperCase() + b.roomType.slice(1)) + (b.room ? ' — ' + sanitize(b.room) : '') : (b.room ? sanitize(b.room) : '—')],
         ['Guests', sanitize(b.guests)],
-        ['Check-in', fmtDate(b.checkin)],
-        ['Check-out', fmtDate(b.checkout)],
+        ['Check-in', fmtDate(b.checkin) + (b.checkinTime ? ' at ' + b.checkinTime : '')],
+        ['Check-out', fmtDate(b.checkout) + (b.checkoutTime ? ' at ' + b.checkoutTime : '')],
         ['Nights', nights],
         ['ID Proof', `${sanitize(b.idType || '—')} — ${sanitize(b.idNum || '—')}`],
         ['Source', sanitize(b.source || 'website')],
@@ -3095,6 +3076,14 @@ function openAddBookingModal() {
   const abOut = document.getElementById('ab_out');
   if (abIn)  { abIn.removeAttribute('min');  abIn.value = today; }
   if (abOut) { abOut.removeAttribute('min'); abOut.value = today; }
+  const abInTime  = document.getElementById('ab_in_time');
+  const abOutTime = document.getElementById('ab_out_time');
+  if (abInTime)  abInTime.value  = '12:00';
+  if (abOutTime) abOutTime.value = '11:00';
+  const abRoomType = document.getElementById('ab_roomtype');
+  const abRoomNo   = document.getElementById('ab_roomno');
+  if (abRoomType) abRoomType.value = 'regular';
+  if (abRoomNo)   abRoomNo.value   = '';
   // Wire check-in change to snap checkout if it falls behind
   if (abIn && abOut) {
     abIn.onchange = () => {
@@ -3121,45 +3110,59 @@ function openAddBookingModal() {
 
 /* ── ADD MANUAL BOOKING ── */
 async function addManualBooking() {
-  const n = document.getElementById('ab_name').value.trim();
-  const p = document.getElementById('ab_phone').value.trim();
+  const n  = document.getElementById('ab_name').value.trim();
+  const p  = document.getElementById('ab_phone').value.trim();
   const ci = document.getElementById('ab_in').value;
   const co = document.getElementById('ab_out').value;
+  const ciTime = document.getElementById('ab_in_time')?.value  || '12:00';
+  const coTime = document.getElementById('ab_out_time')?.value || '11:00';
   const errEl = document.getElementById('abErr');
   errEl.textContent = '';
 
-  if (!n || !p || !ci || !co) { errEl.textContent = 'Please fill all required fields.'; return; }
-  // Allow same-day (checkout same as check-in is valid)
-  if (new Date(co) < new Date(ci)) { errEl.textContent = 'Check-out cannot be before check-in.'; return; }
+  if (!n || !p || !ci || !co) { errEl.textContent = 'Please fill all required fields (Name, Phone, Check-in, Check-out).'; return; }
+  // Allow same-day; only block checkout strictly before check-in date
+  if (new Date(co + 'T' + coTime) < new Date(ci + 'T' + ciTime)) {
+    errEl.textContent = 'Check-out date/time cannot be before check-in.'; return;
+  }
 
   setBtnLoading('abSubmitBtn', true);
   try {
-    const amt = document.getElementById('ab_amount').value;
+    const amt      = document.getElementById('ab_amount').value;
+    const roomType = document.getElementById('ab_roomtype')?.value || 'regular';
+    const roomNo   = document.getElementById('ab_roomno')?.value.trim() || '';
     const bookingId = genBookingId();
+
     const booking = {
-      id: bookingId,
-      name: sanitize(n), phone: sanitize(p),
-      email: sanitize(document.getElementById('ab_email').value.trim()),
-      checkin: ci, checkout: co,
-      guests: document.getElementById('ab_guests').value,
-      idType: document.getElementById('ab_idtype').value,
-      idNum: sanitize(document.getElementById('ab_idnum').value.trim()),
-      idPhotoUrl: null,
-      requests: sanitize(document.getElementById('ab_notes').value.trim()),
-      status: document.getElementById('ab_status').value,
-      amountReceived: amt !== '' ? parseFloat(amt) : null,
+      id:              bookingId,
+      name:            sanitize(n),
+      phone:           sanitize(p),
+      email:           sanitize(document.getElementById('ab_email').value.trim()),
+      checkin:         ci,
+      checkinTime:     ciTime,
+      checkout:        co,
+      checkoutTime:    coTime,
+      roomType:        roomType,
+      room:            sanitize(roomNo),
+      guests:          document.getElementById('ab_guests').value,
+      idType:          document.getElementById('ab_idtype').value,
+      idNum:           sanitize(document.getElementById('ab_idnum').value.trim()),
+      idPhotoUrl:      null,
+      idPhotoUrls:     [],
+      requests:        sanitize(document.getElementById('ab_notes').value.trim()),
+      status:          document.getElementById('ab_status').value,
+      amountReceived:  amt !== '' ? parseFloat(amt) : null,
       amountEnteredBy: amt !== '' ? (window._currentUser?.name || window._currentUser?.email || 'Staff') : null,
       amountEnteredAt: amt !== '' ? new Date().toISOString() : null,
-      source: document.getElementById('ab_source')?.value || (ci < new Date().toISOString().split('T')[0] ? 'past' : 'walkin'),
-      addedBy: window._currentUser?.name || window._currentUser?.email || 'Staff',
-      addedByRole: window._currentUser?.role || 'staff',
-      createdAt: new Date().toISOString()
+      source:          document.getElementById('ab_source')?.value || (ci < new Date().toISOString().split('T')[0] ? 'past' : 'walkin'),
+      addedBy:         window._currentUser?.name || window._currentUser?.email || 'Staff',
+      addedByRole:     window._currentUser?.role || 'staff',
+      createdAt:       new Date().toISOString(),
     };
+
     await fbCreateBooking(booking);
-    await fbLogActivity('manual_booking', `Walk-in booking ${bookingId} added for ${n}`);
+    await fbLogActivity('manual_booking', `${roomType === 'dormitory' ? 'Dormitory' : 'Room'} booking ${bookingId} added for ${n} (${ci} ${ciTime} → ${co} ${coTime})`);
     closeModal('addBookingModal');
-    toast(`✅ Booking ${bookingId} added successfully!`, 'success');
-    // Switch to bookings tab so staff can see it immediately
+    toast(`✅ Booking ${bookingId} added!`, 'success');
     switchTab('bookings');
   } catch(err) {
     console.error(err);
@@ -3183,27 +3186,72 @@ function buildMonthPills() {
   });
 }
 
+/* ── Safe date extractor — handles "YYYY-MM-DD", "YYYY-MM-DDTHH:MM",
+   Firestore Timestamp objects, and plain JS Date objects ── */
+function _safeDate(val) {
+  if (!val) return null;
+  try {
+    // Firestore Timestamp
+    if (typeof val.toDate === 'function') return val.toDate();
+    // Already a JS Date
+    if (val instanceof Date) return isNaN(val) ? null : val;
+    // String — strip time portion for date-only comparison
+    const s = String(val).trim();
+    const dateOnly = s.slice(0, 10); // "YYYY-MM-DD"
+    const d = new Date(dateOnly + 'T00:00:00');
+    return isNaN(d) ? null : d;
+  } catch(e) { return null; }
+}
+
+function _checkinDate(b) { return _safeDate(b.checkin); }
+
 function renderAnalytics() {
   if (window._currentUser?.role !== 'owner') return;
   const all = _bookingsCache;
+
+  if (!all.length) {
+    // Show empty state in charts
+    ['mChart','rChart','weekChart','revWeekChart'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = '<div style="text-align:center;padding:30px 0;color:var(--lighter);font-size:12px;">No data yet</div>';
+    });
+    const tbody = document.getElementById('dayTbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:28px;color:var(--light);">No bookings yet.</td></tr>';
+    ['anK1','anK2','anK3'].forEach(id => { const el = document.getElementById(id); if(el) el.textContent = '0'; });
+    return;
+  }
+
   const mB = all.filter(b => {
-    const d = new Date(b.checkin + 'T00:00:00');
-    return d.getMonth() === _anMonth && d.getFullYear() === _anYear && b.status !== 'cancelled';
+    const d = _checkinDate(b);
+    return d && d.getMonth() === _anMonth && d.getFullYear() === _anYear && b.status !== 'cancelled';
   });
-  const mR = mB.reduce((s, b) => s + (b.amountReceived || 0), 0);
-  const avg = mB.length ? (mB.reduce((s, b) => s + calcNights(b.checkin, b.checkout), 0) / mB.length).toFixed(1) : 0;
-  document.getElementById('anK1').textContent = mB.length;
-  document.getElementById('anK2').textContent = '₹' + mR.toLocaleString('en-IN');
-  document.getElementById('anK3').textContent = avg;
-  buildMonChart(all); buildRevChart(all); buildDayWise(all);
+  const mR  = mB.reduce((s, b) => s + (Number(b.amountReceived) || 0), 0);
+  const avg  = mB.length ? (mB.reduce((s, b) => s + calcNights(b.checkin, b.checkout), 0) / mB.length).toFixed(1) : 0;
+
+  const k1 = document.getElementById('anK1'); if (k1) k1.textContent = mB.length;
+  const k2 = document.getElementById('anK2'); if (k2) k2.textContent = '₹' + mR.toLocaleString('en-IN');
+  const k3 = document.getElementById('anK3'); if (k3) k3.textContent = avg;
+
+  buildMonChart(all);
+  buildRevChart(all);
+  buildDayWise(all);
 }
 
 function buildBarChart(containerId, data, labels, color = 'var(--gold)', suffix = '') {
   const el = document.getElementById(containerId);
   if (!el) return;
   const max = Math.max(...data, 1);
+  if (data.every(v => v === 0)) {
+    el.innerHTML = '<div style="text-align:center;padding:30px 0;color:var(--lighter);font-size:12px;">No data for this period</div>';
+    return;
+  }
   el.innerHTML = data.map((v, i) =>
-    `<div class="bar-col"><div class="bar-fill" style="height:${(v/max)*100}%;background:${color}"><div class="bar-tip">${suffix}${typeof v === 'number' && suffix === '₹' ? v.toLocaleString('en-IN') : v}</div></div><div class="bar-lbl">${labels[i]}</div></div>`
+    `<div class="bar-col">
+      <div class="bar-fill" style="height:${Math.max((v/max)*100, v > 0 ? 4 : 0)}%;background:${color}">
+        <div class="bar-tip">${suffix === '₹' ? '₹' + Number(v).toLocaleString('en-IN') : v}</div>
+      </div>
+      <div class="bar-lbl">${labels[i]}</div>
+    </div>`
   ).join('');
 }
 
@@ -3213,8 +3261,12 @@ function buildWeekChart(all) {
   const now = new Date();
   for (let i = 6; i >= 0; i--) {
     const d = new Date(now); d.setDate(now.getDate() - i);
+    const ds = d.toISOString().split('T')[0];
     lbls.push(days[d.getDay()]);
-    counts[6-i] = all.filter(b => b.checkin === d.toISOString().split('T')[0]).length;
+    counts[6-i] = all.filter(b => {
+      const cd = _checkinDate(b);
+      return cd && cd.toISOString().split('T')[0] === ds;
+    }).length;
   }
   buildBarChart('weekChart', counts, lbls, 'var(--gold)');
 }
@@ -3225,41 +3277,62 @@ function buildRevWeekChart(all) {
   const now = new Date();
   for (let i = 6; i >= 0; i--) {
     const d = new Date(now); d.setDate(now.getDate() - i);
-    lbls.push(days[d.getDay()]);
     const ds = d.toISOString().split('T')[0];
-    counts[6-i] = all.filter(b => b.checkin === ds && b.amountReceived).reduce((s, b) => s + (b.amountReceived || 0), 0);
+    lbls.push(days[d.getDay()]);
+    counts[6-i] = all.filter(b => {
+      const cd = _checkinDate(b);
+      return cd && cd.toISOString().split('T')[0] === ds && b.amountReceived;
+    }).reduce((s, b) => s + (Number(b.amountReceived) || 0), 0);
   }
   buildBarChart('revWeekChart', counts, lbls, 'var(--green)', '₹');
 }
 
 function buildMonChart(all) {
-  const mo = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+  const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const counts = Array(12).fill(0);
-  all.filter(b => b.status !== 'cancelled').forEach(b => { const d = new Date(b.checkin + 'T00:00:00'); if (d.getFullYear() === _anYear) counts[d.getMonth()]++; });
+  all.filter(b => b.status !== 'cancelled').forEach(b => {
+    const d = _checkinDate(b);
+    if (d && d.getFullYear() === _anYear) counts[d.getMonth()]++;
+  });
   buildBarChart('mChart', counts, mo, 'var(--gold)');
 }
 
 function buildRevChart(all) {
-  const mo = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+  const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const counts = Array(12).fill(0);
-  all.forEach(b => { const d = new Date(b.checkin + 'T00:00:00'); if (d.getFullYear() === _anYear && b.amountReceived) counts[d.getMonth()] += b.amountReceived; });
+  all.forEach(b => {
+    const d = _checkinDate(b);
+    if (d && d.getFullYear() === _anYear && b.amountReceived) {
+      counts[d.getMonth()] += Number(b.amountReceived) || 0;
+    }
+  });
   buildBarChart('rChart', counts, mo, 'var(--green)', '₹');
 }
 
 function buildDayWise(all) {
   const map = {};
   all.filter(b => {
-    const d = new Date(b.checkin + 'T00:00:00');
-    return d.getMonth() === _anMonth && d.getFullYear() === _anYear && b.status !== 'cancelled';
+    const d = _checkinDate(b);
+    return d && d.getMonth() === _anMonth && d.getFullYear() === _anYear && b.status !== 'cancelled';
   }).forEach(b => {
-    if (!map[b.checkin]) map[b.checkin] = { count: 0, rev: 0 };
-    map[b.checkin].count++;
-    map[b.checkin].rev += (b.amountReceived || 0);
+    const dk = String(b.checkin).slice(0, 10); // normalize key to YYYY-MM-DD
+    if (!map[dk]) map[dk] = { count: 0, rev: 0 };
+    map[dk].count++;
+    map[dk].rev += (Number(b.amountReceived) || 0);
   });
   const tbody = document.getElementById('dayTbody');
+  if (!tbody) return;
   const keys = Object.keys(map).sort();
-  if (!keys.length) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:28px;color:var(--light);">No bookings this month.</td></tr>'; return; }
-  tbody.innerHTML = keys.map(k => `<tr><td>${fmtDate(k)}</td><td><strong>${map[k].count}</strong></td><td>${map[k].rev ? '₹' + map[k].rev.toLocaleString('en-IN') : '—'}</td></tr>`).join('');
+  if (!keys.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:28px;color:var(--light);">No bookings this month.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = keys.map(k => `
+    <tr>
+      <td>${fmtDate(k)}</td>
+      <td><strong>${map[k].count}</strong></td>
+      <td>${map[k].rev ? '₹' + map[k].rev.toLocaleString('en-IN') : '—'}</td>
+    </tr>`).join('');
 }
 
 /* ── STAFF LOGS ── */
@@ -3393,326 +3466,232 @@ const _obs = new IntersectionObserver(entries => {
 }, { threshold: .1, rootMargin: '0px 0px -40px 0px' });
 document.querySelectorAll('.fade-up').forEach(el => _obs.observe(el));
 
-// Firebase auth state — auto-restore session
-window._onAuthReady = async (user) => {
-  if (user && user.role) {
-    closeLoginPage();
-    await openDashboard(user);
-  } else {
-    window._currentUser = null;
-  }
-};
+// ── Firebase Auth State — auto-restore session on page reload ──
+(function waitForFB() {
+  if (!window._FB) { setTimeout(waitForFB, 100); return; }
 
-// Session timeout (8hr) for non-Firebase dev mode
+  const { auth, fns } = window._FB;
+
+  // onAuthStateChanged — fires on load and whenever auth changes
+  auth.onAuthStateChanged(async (fbUser) => {
+    if (fbUser) {
+      // User is logged in — restore their session
+      const email = fbUser.email || '';
+      const role  = email.includes('owner') ? 'owner' : 'staff';
+      const name  = role === 'owner' ? 'Hotel Owner' : 'Front Desk';
+      window._currentUser = { uid: fbUser.uid, email, role, name };
+      _lsSet('fh_session', { user: window._currentUser, time: Date.now() });
+      // Only open dashboard if not already open
+      if (document.getElementById('staffDash').style.display !== 'block') {
+        closeLoginPage();
+        await openDashboard(window._currentUser);
+      }
+    } else {
+      // Not logged in
+      window._currentUser = null;
+      _lsSet('fh_session', null);
+    }
+  });
+})();
+
+// Session timeout (8hr) for non-Firebase dev mode (localhost fallback)
 (function() {
+  if (USE_FIREBASE()) return; // Firebase handles auth, skip localStorage
   const s = _lsGet('fh_session', null);
-  if (!USE_FIREBASE() && s && s.user && (Date.now() - s.time) < 8 * 60 * 60 * 1000) {
+  if (s && s.user && (Date.now() - s.time) < 8 * 60 * 60 * 1000) {
     openDashboard(s.user);
   }
 })();
 
-
 /* ══════════════════════════════════════
-   EXCEL IMPORT FEATURE
+   EXCEL IMPORT
 ══════════════════════════════════════ */
-
-let _xlRows    = [];
-let _xlHeaders = [];
-
-// Your exact Excel columns → internal booking fields
-const XL_FIELDS = [
-  { key: 'origId',   label: 'Booking # (existing ID)',  required: false },
-  { key: 'name',     label: 'Guest Name *',              required: true  },
-  { key: 'phone',    label: 'Phone / Mobile',            required: false },
-  { key: 'persons',  label: 'Person / Pax count',        required: false },
-  { key: 'room',     label: 'Room No. (No.)',            required: false },
-  { key: 'checkin',  label: 'Check-in Date *',           required: true  },
-  { key: 'checkout', label: 'Check-out Date *',          required: true  },
-  { key: 'amount',   label: 'Amount (₹)',                required: false },
-  { key: 'payment',  label: 'Mode of Payment',           required: false },
-  { key: 'date',     label: 'Date (entry date)',         required: false },
-  { key: 'time',     label: 'Time (entry time)',         required: false },
+let _xlRows=[], _xlHeaders=[];
+const XL_FIELDS=[
+  {key:'origId',  label:'Booking # (existing)',   required:false},
+  {key:'name',    label:'Guest Name *',            required:true},
+  {key:'phone',   label:'Phone / Mobile',          required:false},
+  {key:'persons', label:'Person / Pax count',      required:false},
+  {key:'room',    label:'Room No. (No.)',           required:false},
+  {key:'checkin', label:'Check-in Date *',         required:true},
+  {key:'checkout',label:'Check-out Date *',        required:true},
+  {key:'amount',  label:'Amount (₹)',              required:false},
+  {key:'payment', label:'Mode of Payment',         required:false},
+  {key:'date',    label:'Entry Date',              required:false},
+  {key:'time',    label:'Entry Time',              required:false},
 ];
-
-function openExcelImport() {
-  document.getElementById('xlMappingSection').style.display   = 'none';
-  document.getElementById('xlProgressSection').style.display  = 'none';
-  document.getElementById('xlResultSection').style.display    = 'none';
-  document.getElementById('xlDropZone').style.display         = 'block';
-  document.getElementById('xlFileInput').value = '';
-  _xlRows = []; _xlHeaders = [];
+function openExcelImport(){
+  ['xlMappingSection','xlProgressSection','xlResultSection'].forEach(id=>document.getElementById(id).style.display='none');
+  document.getElementById('xlDropZone').style.display='block';
+  document.getElementById('xlFileInput').value='';
+  _xlRows=[];_xlHeaders=[];
   openModal('excelImportModal');
 }
-
-function xlDragOver(e) {
-  e.preventDefault();
-  document.getElementById('xlDropZone').style.background   = '#fef9ec';
-  document.getElementById('xlDropZone').style.borderColor  = '#b8860b';
-}
-function xlDragLeave(e) {
-  document.getElementById('xlDropZone').style.background  = 'var(--gold-pale)';
-  document.getElementById('xlDropZone').style.borderColor = 'var(--gold)';
-}
-function xlDrop(e) {
-  e.preventDefault(); xlDragLeave(e);
-  const file = e.dataTransfer.files[0];
-  if (file) xlProcessFile(file);
-}
-function xlFileChosen(e) {
-  const file = e.target.files[0];
-  if (file) xlProcessFile(file);
-}
-
-function xlProcessFile(file) {
-  if (!file.name.match(/\.xlsx?$/i)) { toast('Please upload an .xlsx or .xls file', 'error'); return; }
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const wb   = XLSX.read(e.target.result, { type: 'array', cellDates: true });
-      const ws   = wb.Sheets[wb.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
-      if (!json.length) { toast('Excel file is empty or unreadable', 'error'); return; }
-      _xlRows    = json;
-      _xlHeaders = Object.keys(json[0]);
-      xlShowMapping();
-    } catch(err) { toast('Could not read file: ' + err.message, 'error'); }
+function xlDragOver(e){e.preventDefault();document.getElementById('xlDropZone').style.background='#fef9ec';document.getElementById('xlDropZone').style.borderColor='#b8860b';}
+function xlDragLeave(e){document.getElementById('xlDropZone').style.background='var(--gold-pale)';document.getElementById('xlDropZone').style.borderColor='var(--gold)';}
+function xlDrop(e){e.preventDefault();xlDragLeave(e);const f=e.dataTransfer.files[0];if(f)xlProcessFile(f);}
+function xlFileChosen(e){const f=e.target.files[0];if(f)xlProcessFile(f);}
+function xlProcessFile(file){
+  if(!file.name.match(/\.xlsx?$/i)){toast('Please upload .xlsx or .xls','error');return;}
+  const r=new FileReader();
+  r.onload=function(e){
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const json=XLSX.utils.sheet_to_json(ws,{defval:''});
+      if(!json.length){toast('File is empty','error');return;}
+      _xlRows=json;_xlHeaders=Object.keys(json[0]);xlShowMapping();
+    }catch(err){toast('Could not read file: '+err.message,'error');}
   };
-  reader.readAsArrayBuffer(file);
+  r.readAsArrayBuffer(file);
 }
-
-function xlShowMapping() {
-  document.getElementById('xlDropZone').style.display = 'none';
-
-  // ── Auto-detect your exact column names ──
-  const autoMap = {};
-  const norm    = h => h.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-  _xlHeaders.forEach(h => {
-    const n = norm(h);
-    // Original booking ID — "#" or "id" or "bookingid" or "sr"
-    if (!autoMap.origId   && (n === '#' || n === 'sr' || n === 'srno' || n === 'sno' || n.includes('bookingid') || n.includes('bkgid') || (n === 'id'))) autoMap.origId = h;
-    // Guest name
-    if (!autoMap.name     && (n.includes('guest') || n === 'name' || n === 'guestname' || n === 'customername')) autoMap.name = h;
-    // Phone
-    if (!autoMap.phone    && (n.includes('phone') || n.includes('mobile') || n.includes('contact') || n.includes('number') && n.includes('mob'))) autoMap.phone = h;
-    // Persons / pax
-    if (!autoMap.persons  && (n === 'person' || n === 'persons' || n === 'pax' || n === 'paxcount' || n === 'personcount' || n.includes('noof') || n === 'count')) autoMap.persons = h;
-    // Room No — your column is literally "No."
-    if (!autoMap.room     && (n === 'no' || n === 'roomno' || n === 'room' || n === 'roomnumber' || n === 'rno' || n === 'roomno')) autoMap.room = h;
-    // Check-in
-    if (!autoMap.checkin  && (n === 'checkin' || n === 'checkindate' || n === 'arrival' || n === 'from' || n === 'checkindatetime')) autoMap.checkin = h;
-    // Check-out
-    if (!autoMap.checkout && (n === 'checkout' || n === 'checkoutdate' || n === 'departure' || n === 'to' || n === 'checkoutdatetime')) autoMap.checkout = h;
-    // Amount
-    if (!autoMap.amount   && (n === 'amount' || n === 'total' || n === 'price' || n === 'rate' || n === 'charge' || n === 'fee' || n === 'totalamount' || n === 'billamount')) autoMap.amount = h;
-    // Payment mode — cash / bank / pending
-    if (!autoMap.payment  && (n.includes('mode') || n.includes('payment') || n === 'paymode' || n === 'modeofpayment' || n === 'paymentmode' || n === 'paymentmethod')) autoMap.payment = h;
-    // Date (entry/created date)
-    if (!autoMap.date     && (n === 'date' || n === 'entrydate' || n === 'bookingdate' || n === 'createddate')) autoMap.date = h;
-    // Time (entry time)
-    if (!autoMap.time     && (n === 'time' || n === 'entrytime' || n === 'bookingtime' || n === 'createdtime')) autoMap.time = h;
+function xlShowMapping(){
+  document.getElementById('xlDropZone').style.display='none';
+  const autoMap={};
+  const norm=h=>h.toLowerCase().replace(/[^a-z0-9]/g,'');
+  _xlHeaders.forEach(h=>{
+    const n=norm(h);
+    if(!autoMap.origId   &&(n==='#'||n==='sr'||n==='srno'||n==='sno'||n.includes('bookingid')))autoMap.origId=h;
+    if(!autoMap.name     &&(n.includes('guest')||n==='name'||n==='guestname'||n==='customername'))autoMap.name=h;
+    if(!autoMap.phone    &&(n.includes('phone')||n.includes('mobile')||n.includes('contact')))autoMap.phone=h;
+    if(!autoMap.persons  &&(n==='person'||n==='persons'||n==='pax'||n.includes('noof')||n==='count'))autoMap.persons=h;
+    if(!autoMap.room     &&(n==='no'||n==='roomno'||n==='room'||n==='rno'))autoMap.room=h;
+    if(!autoMap.checkin  &&(n==='checkin'||n==='checkindate'||n==='arrival'||n==='from'))autoMap.checkin=h;
+    if(!autoMap.checkout &&(n==='checkout'||n==='checkoutdate'||n==='departure'||n==='to'))autoMap.checkout=h;
+    if(!autoMap.amount   &&(n==='amount'||n==='total'||n==='price'||n==='rate'||n==='billamount'))autoMap.amount=h;
+    if(!autoMap.payment  &&(n.includes('mode')||n.includes('payment')||n==='paymode'))autoMap.payment=h;
+    if(!autoMap.date     &&(n==='date'||n==='entrydate'||n==='bookingdate'))autoMap.date=h;
+    if(!autoMap.time     &&(n==='time'||n==='entrytime'||n==='bookingtime'))autoMap.time=h;
   });
-
-  // ── Build mapping dropdowns ──
-  const grid = document.getElementById('xlMappingGrid');
-  grid.innerHTML = XL_FIELDS.map(f => `
-    <div style="display:flex;flex-direction:column;gap:4px;">
-      <label style="font-size:11px;font-weight:600;color:var(--dark);">${f.label}</label>
-      <select id="xlmap_${f.key}" style="font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;">
-        <option value="">— Skip —</option>
-        ${_xlHeaders.map(h => `<option value="${h}" ${autoMap[f.key] === h ? 'selected' : ''}>${h}</option>`).join('')}
-      </select>
-    </div>
-  `).join('');
-
-  // ── Mini data preview ──
-  const previewRows = _xlRows.slice(0, 3);
-  const previewCols = _xlHeaders.slice(0, 7);
-  const table = `
-    <div style="overflow-x:auto;margin-top:8px;">
-    <table style="width:100%;border-collapse:collapse;font-size:11px;">
-      <thead><tr>${previewCols.map(h => `<th style="padding:4px 6px;background:#f5f5f0;border:1px solid #e0ddd5;white-space:nowrap;">${h}</th>`).join('')}</tr></thead>
-      <tbody>${previewRows.map(r => `<tr>${previewCols.map(c => `<td style="padding:4px 6px;border:1px solid #e0ddd5;white-space:nowrap;">${r[c] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>
-    </table></div>`;
-
-  document.getElementById('xlPreviewInfo').innerHTML =
-    `✅ <strong>${_xlRows.length} rows</strong> found. Preview of first 3 rows:${table}`;
-  document.getElementById('xlMappingSection').style.display = 'block';
+  const grid=document.getElementById('xlMappingGrid');
+  grid.innerHTML=XL_FIELDS.map(f=>`<div style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11px;font-weight:600;color:var(--dark);">${f.label}</label><select id="xlmap_${f.key}" style="font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;"><option value="">— Skip —</option>${_xlHeaders.map(h=>`<option value="${h}"${autoMap[f.key]===h?' selected':''}>${h}</option>`).join('')}</select></div>`).join('');
+  const prev=_xlRows.slice(0,3);const pc=_xlHeaders.slice(0,7);
+  const tbl=`<div style="overflow-x:auto;margin-top:8px;"><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr>${pc.map(h=>`<th style="padding:4px 6px;background:#f5f5f0;border:1px solid #e0ddd5;white-space:nowrap;">${h}</th>`).join('')}</tr></thead><tbody>${prev.map(r=>`<tr>${pc.map(c=>`<td style="padding:4px 6px;border:1px solid #e0ddd5;white-space:nowrap;">${r[c]??''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  document.getElementById('xlPreviewInfo').innerHTML=`✅ <strong>${_xlRows.length} rows</strong> found. Preview:${tbl}`;
+  document.getElementById('xlMappingSection').style.display='block';
 }
-
-function xlGetMapping() {
-  const map = {};
-  XL_FIELDS.forEach(f => {
-    const el = document.getElementById('xlmap_' + f.key);
-    if (el && el.value) map[f.key] = el.value;
-  });
-  return map;
-}
-
-/* ── Date parser — handles DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD, JS Date ── */
-function xlParseDate(val) {
-  if (!val) return null;
-  if (val instanceof Date) {
-    if (isNaN(val)) return null;
-    return `${val.getFullYear()}-${String(val.getMonth()+1).padStart(2,'0')}-${String(val.getDate()).padStart(2,'0')}`;
-  }
-  const s = String(val).trim();
-  // YYYY-MM-DD or YYYY/MM/DD
-  const iso = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
-  if (iso) return `${iso[1]}-${iso[2].padStart(2,'0')}-${iso[3].padStart(2,'0')}`;
-  // DD/MM/YYYY or DD-MM-YYYY (most common in India)
-  const dmy = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})/);
-  if (dmy) {
-    const yr = dmy[3].length === 2 ? '20' + dmy[3] : dmy[3];
-    return `${yr}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;
-  }
-  const d = new Date(s);
-  if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+function xlGetMapping(){const map={};XL_FIELDS.forEach(f=>{const el=document.getElementById('xlmap_'+f.key);if(el&&el.value)map[f.key]=el.value;});return map;}
+function xlParseDate(val){
+  if(!val)return null;
+  if(val instanceof Date){if(isNaN(val))return null;return `${val.getFullYear()}-${String(val.getMonth()+1).padStart(2,'0')}-${String(val.getDate()).padStart(2,'0')}`;}
+  const s=String(val).trim();
+  const iso=s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  if(iso)return `${iso[1]}-${iso[2].padStart(2,'0')}-${iso[3].padStart(2,'0')}`;
+  const dmy=s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})/);
+  if(dmy){const yr=dmy[3].length===2?'20'+dmy[3]:dmy[3];return `${yr}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;}
+  const d=new Date(s);if(!isNaN(d))return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   return null;
 }
-
-/* ── Payment mode normaliser ── */
-function xlMapPayment(val) {
-  if (!val) return 'pending';
-  const v = String(val).toLowerCase().trim();
-  if (v.includes('cash'))                           return 'cash';
-  if (v.includes('bank') || v.includes('transfer') || v.includes('neft') || v.includes('rtgs') || v.includes('upi') || v.includes('online') || v.includes('gpay') || v.includes('paytm') || v.includes('phonepe')) return 'bank';
-  if (v.includes('card'))                           return 'card';
-  if (v.includes('pending') || v === '')            return 'pending';
-  return v; // keep original if unknown
+function xlMapPayment(val){
+  if(!val)return'pending';const v=String(val).toLowerCase().trim();
+  if(v.includes('cash'))return'cash';
+  if(v.includes('bank')||v.includes('upi')||v.includes('online')||v.includes('neft')||v.includes('transfer')||v.includes('gpay')||v.includes('paytm')||v.includes('phonepe'))return'bank';
+  if(v.includes('card'))return'card';
+  if(v.includes('pending'))return'pending';
+  return v;
 }
-
-/* ── Generate new FH-XXXXX style ID ── */
-function xlGenFHId(origId) {
-  // If original already looks like FH-XXXXX keep it, else generate new
-  const s = String(origId || '').trim();
-  if (s.match(/^FH-/i)) return s.toUpperCase();
-  // Generate: FH- + 5 random alphanumeric
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let rand = '';
-  for (let i = 0; i < 5; i++) rand += chars[Math.floor(Math.random() * chars.length)];
-  return 'FH-' + rand;
+function xlGenFHId(origId){
+  const s=String(origId||'').trim();
+  if(s.match(/^FH-/i))return s.toUpperCase();
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let rand='';for(let i=0;i<5;i++)rand+=chars[Math.floor(Math.random()*chars.length)];
+  return'FH-'+rand;
 }
-
-async function xlStartImport() {
-  const map = xlGetMapping();
-  const missing = XL_FIELDS.filter(f => f.required && !map[f.key]).map(f => f.label);
-  if (missing.length) { toast('Map required fields: ' + missing.join(', '), 'error'); return; }
-
-  setBtnLoading('xlImportBtn', true);
-  document.getElementById('xlMappingSection').style.display  = 'none';
-  document.getElementById('xlProgressSection').style.display = 'block';
-
-  let imported = 0, skipped = 0, failed = 0;
-
-  // ── Build all valid booking objects ──
-  const validBookings = [];
-  for (const row of _xlRows) {
-    const checkin  = xlParseDate(map.checkin  ? row[map.checkin]  : null);
-    const checkout = xlParseDate(map.checkout ? row[map.checkout] : null);
-    const name     = map.name ? String(row[map.name] || '').trim() : '';
-
-    if (!name || !checkin || !checkout) { skipped++; continue; }
-
-    // Amount
-    const amtRaw = map.amount ? row[map.amount] : null;
-    const amount = (amtRaw !== null && amtRaw !== '')
-      ? (parseFloat(String(amtRaw).replace(/[^0-9.]/g, '')) || null)
-      : null;
-
-    // Persons → "N Guests" label
-    const paxRaw = map.persons ? String(row[map.persons] || '').trim() : '';
-    const paxNum = parseInt(paxRaw) || 1;
-    const guests = paxNum > 1 ? paxNum + ' Guests' : '1 Guest';
-
-    // Room
-    const room = sanitize(map.room ? String(row[map.room] || '').trim() : '');
-
-    // Payment mode
-    const payMode = xlMapPayment(map.payment ? row[map.payment] : null);
-
-    // Entry date + time → createdAt
-    const entryDate = xlParseDate(map.date ? row[map.date] : null) || checkin;
-    const entryTime = map.time ? String(row[map.time] || '').trim() : '';
-    const createdAt = entryTime ? `${entryDate}T${entryTime}` : entryDate;
-
-    // Original # from Excel + new FH- ID
-    const origId  = map.origId ? String(row[map.origId] || '').trim() : '';
-    const newFHId = xlGenFHId(origId); // always generate a FH-XXXXX
-
-    validBookings.push({
-      id:              newFHId,          // new FH-XXXXX displayed in portal
-      origBookingRef:  origId || null,   // keep old # as reference field
-      name:            sanitize(name),
-      phone:           sanitize(map.phone ? String(row[map.phone] || '').trim() : ''),
-      email:           '',
-      checkin,
-      checkout,
-      guests,
-      room,
-      idType:          '',
-      idNum:           '',
-      requests:        room ? `Room No: ${room}` : '',
-      status:          'checkedout',     // old data = already done
-      amountReceived:  amount,
-      paymentMode:     payMode,          // cash / bank / card / pending
-      amountEnteredBy: amount ? 'Excel Import' : null,
-      amountEnteredAt: amount ? new Date().toISOString() : null,
-      source:          'excel_import',
-      importedAt:      new Date().toISOString(),
-      idPhotoUrl:      null,
-      idPhotoUrls:     [],
-      createdAt,
-    });
+async function xlStartImport(){
+  const map=xlGetMapping();
+  const missing=XL_FIELDS.filter(f=>f.required&&!map[f.key]).map(f=>f.label);
+  if(missing.length){toast('Map required fields: '+missing.join(', '),'error');return;}
+  setBtnLoading('xlImportBtn',true);
+  document.getElementById('xlMappingSection').style.display='none';
+  document.getElementById('xlProgressSection').style.display='block';
+  let imported=0,skipped=0,failed=0;
+  const validBookings=[];
+  for(const row of _xlRows){
+    const checkin=xlParseDate(map.checkin?row[map.checkin]:null);
+    const checkout=xlParseDate(map.checkout?row[map.checkout]:null);
+    const name=map.name?String(row[map.name]||'').trim():'';
+    if(!name||!checkin||!checkout){skipped++;continue;}
+    const amtRaw=map.amount?row[map.amount]:null;
+    const amount=(amtRaw!==null&&amtRaw!=='')?parseFloat(String(amtRaw).replace(/[^0-9.]/g,''))||null:null;
+    const paxRaw=map.persons?String(row[map.persons]||'').trim():'';
+    const paxNum=parseInt(paxRaw)||1;
+    const guests=paxNum>1?paxNum+' Guests':'1 Guest';
+    const room=sanitize(map.room?String(row[map.room]||'').trim():'');
+    const payMode=xlMapPayment(map.payment?row[map.payment]:null);
+    const entryDate=xlParseDate(map.date?row[map.date]:null)||checkin;
+    const entryTime=map.time?String(row[map.time]||'').trim():'';
+    const createdAt=entryTime?`${entryDate}T${entryTime}`:entryDate;
+    const origId=map.origId?String(row[map.origId]||'').trim():'';
+    const newFHId=xlGenFHId(origId);
+    validBookings.push({id:newFHId,origBookingRef:origId||null,name:sanitize(name),phone:sanitize(map.phone?String(row[map.phone]||'').trim():''),email:'',checkin,checkout,guests,room,roomType:'regular',idType:'',idNum:'',requests:room?`Room No: ${room}`:'',status:'checkedout',amountReceived:amount,paymentMode:payMode,amountEnteredBy:amount?'Excel Import':null,amountEnteredAt:amount?new Date().toISOString():null,source:'excel_import',importedAt:new Date().toISOString(),idPhotoUrl:null,idPhotoUrls:[],createdAt});
   }
-
-  if (!validBookings.length) {
-    document.getElementById('xlProgressSection').style.display = 'none';
-    document.getElementById('xlResultSection').style.display   = 'block';
-    document.getElementById('xlResultIcon').textContent  = '⚠️';
-    document.getElementById('xlResultTitle').textContent = 'Nothing to import';
-    document.getElementById('xlResultDesc').textContent  = `All ${skipped} rows were skipped — missing Guest Name, Check-in, or Check-out.`;
-    setBtnLoading('xlImportBtn', false);
-    return;
+  if(!validBookings.length){
+    document.getElementById('xlProgressSection').style.display='none';
+    document.getElementById('xlResultSection').style.display='block';
+    document.getElementById('xlResultIcon').textContent='⚠️';
+    document.getElementById('xlResultTitle').textContent='Nothing to import';
+    document.getElementById('xlResultDesc').textContent=`All ${skipped} rows skipped — missing Name, Check-in, or Check-out.`;
+    setBtnLoading('xlImportBtn',false);return;
   }
-
-  // ── Write in batches of 20 (safe for Firestore) ──
-  const BATCH = 20;
-  const batches = [];
-  for (let i = 0; i < validBookings.length; i += BATCH) batches.push(validBookings.slice(i, i + BATCH));
-
-  for (let b = 0; b < batches.length; b++) {
-    const pct  = Math.round(((b * BATCH) / validBookings.length) * 100);
-    document.getElementById('xlProgressBar').style.width   = pct + '%';
-    document.getElementById('xlProgressText').textContent  = `Saving batch ${b+1} of ${batches.length}…`;
-    document.getElementById('xlProgressCount').textContent = `✅ ${imported} saved · ⏳ ${validBookings.length - (b * BATCH)} left · ⚠️ ${skipped} skipped`;
-
-    const results = await Promise.allSettled(batches[b].map(bk => fbCreateBooking(bk)));
-    results.forEach(r => r.status === 'fulfilled' ? imported++ : failed++);
-
-    if (b < batches.length - 1) await new Promise(r => setTimeout(r, 500));
+  const BATCH=20;const batches=[];
+  for(let i=0;i<validBookings.length;i+=BATCH)batches.push(validBookings.slice(i,i+BATCH));
+  for(let b=0;b<batches.length;b++){
+    const pct=Math.round(((b*BATCH)/validBookings.length)*100);
+    document.getElementById('xlProgressBar').style.width=pct+'%';
+    document.getElementById('xlProgressText').textContent=`Saving batch ${b+1} of ${batches.length}…`;
+    document.getElementById('xlProgressCount').textContent=`✅ ${imported} saved · ⏳ ${validBookings.length-(b*BATCH)} left · ⚠️ ${skipped} skipped`;
+    const results=await Promise.allSettled(batches[b].map(bk=>fbCreateBooking(bk)));
+    results.forEach(r=>r.status==='fulfilled'?imported++:failed++);
+    if(b<batches.length-1)await new Promise(r=>setTimeout(r,500));
   }
-
-  // Final progress
-  document.getElementById('xlProgressBar').style.width   = '100%';
-  document.getElementById('xlProgressCount').textContent = `✅ ${imported} saved · ⚠️ ${skipped} skipped · ❌ ${failed} failed`;
-
-  // ── Result screen ──
-  document.getElementById('xlProgressSection').style.display = 'none';
-  document.getElementById('xlResultSection').style.display   = 'block';
-  document.getElementById('xlResultIcon').textContent  = failed === validBookings.length ? '❌' : '✅';
-  document.getElementById('xlResultTitle').textContent = 'Import Complete!';
-  document.getElementById('xlResultDesc').textContent  =
-    `${imported} bookings imported · ${skipped} rows skipped (missing required data) · ${failed} failed to save`;
-
-  if (imported > 0) {
-    fbLogActivity('Excel Import', `${imported} old bookings imported from Excel`);
-    toast(`✅ ${imported} bookings imported successfully!`, 'success', 5000);
-  }
-  setBtnLoading('xlImportBtn', false);
+  document.getElementById('xlProgressBar').style.width='100%';
+  document.getElementById('xlProgressSection').style.display='none';
+  document.getElementById('xlResultSection').style.display='block';
+  document.getElementById('xlResultIcon').textContent=imported>0?'✅':'⚠️';
+  document.getElementById('xlResultTitle').textContent='Import Complete!';
+  document.getElementById('xlResultDesc').textContent=`${imported} imported · ${skipped} skipped · ${failed} failed`;
+  if(imported>0){fbLogActivity('Excel Import',`${imported} bookings imported`);toast(`✅ ${imported} bookings imported!`,'success',5000);}
+  setBtnLoading('xlImportBtn',false);
 }
-
 
 </script>
+
+<!-- EXCEL IMPORT MODAL -->
+<div class="modal-wrap" id="excelImportModal" role="dialog" aria-modal="true">
+  <div class="modal-box wide" style="max-width:680px;">
+    <button class="modal-close" onclick="closeModal('excelImportModal')" aria-label="Close">✕</button>
+    <h2 class="modal-h">📂 Import Old Bookings from Excel</h2>
+    <p class="modal-sub">Drag & drop your <strong>.xlsx / .xls</strong> file. Columns: Guest Name, Phone, Person, No. (Room), Check-in, Check-out, Amount, Mode of Payment, Date, Time.</p>
+    <div id="xlDropZone" style="border:2px dashed var(--gold);border-radius:12px;padding:40px 20px;text-align:center;cursor:pointer;background:var(--gold-pale);margin:18px 0;"
+      ondragover="xlDragOver(event)" ondragleave="xlDragLeave(event)" ondrop="xlDrop(event)"
+      onclick="document.getElementById('xlFileInput').click()">
+      <div style="font-size:42px;margin-bottom:10px;">📊</div>
+      <div style="font-size:15px;font-weight:600;color:var(--gold);margin-bottom:6px;">Drop your Excel file here</div>
+      <div style="font-size:12px;color:var(--light);">or click to browse</div>
+      <input type="file" id="xlFileInput" accept=".xlsx,.xls" style="display:none" onchange="xlFileChosen(event)"/>
+    </div>
+    <div id="xlMappingSection" style="display:none;">
+      <div style="font-size:13px;font-weight:600;color:var(--dark);margin-bottom:10px;">📋 Map Your Columns</div>
+      <div id="xlMappingGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;"></div>
+      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;font-size:12px;color:#166534;margin-bottom:14px;overflow-x:auto;" id="xlPreviewInfo"></div>
+      <button class="btn btn-gold btn-block" id="xlImportBtn" onclick="xlStartImport()"><span class="btn-text">🚀 Import Bookings</span></button>
+    </div>
+    <div id="xlProgressSection" style="display:none;text-align:center;padding:20px 0;">
+      <div style="font-size:32px;margin-bottom:12px;">⏳</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px;" id="xlProgressText">Importing...</div>
+      <div style="background:var(--border);border-radius:999px;height:8px;overflow:hidden;margin:0 auto;max-width:300px;">
+        <div id="xlProgressBar" style="height:100%;background:var(--gold);border-radius:999px;width:0%;transition:width .3s;"></div>
+      </div>
+      <div style="font-size:12px;color:var(--light);margin-top:8px;" id="xlProgressCount"></div>
+    </div>
+    <div id="xlResultSection" style="display:none;text-align:center;padding:16px 0;">
+      <div style="font-size:40px;margin-bottom:10px;" id="xlResultIcon">✅</div>
+      <div style="font-size:16px;font-weight:600;margin-bottom:6px;" id="xlResultTitle"></div>
+      <div style="font-size:13px;color:var(--light);margin-bottom:18px;" id="xlResultDesc"></div>
+      <button class="btn btn-gold" onclick="closeModal('excelImportModal');switchTab('bookings')">Done — View Bookings</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
