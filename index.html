@@ -44,6 +44,7 @@
   import { getAnalytics } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js';
   import { getFirestore, collection, doc, addDoc, updateDoc, getDocs, getDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, increment } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
   import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+  import { getAuth, signInWithEmailAndPassword, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
   // ═══════════════════════════════════════════════
   // FIREBASE CONFIG — Forever Hotel Surat
@@ -62,12 +63,15 @@
   const analytics = getAnalytics(app);
   const db = getFirestore(app);
   const storage = getStorage(app);
+  const auth = getAuth(app);
 
-  // Expose Firestore + Storage to global scope
-  window._FB = { db, storage, fns: {
+  // Expose Firestore + Storage + Auth to global scope
+  window._FB = { db, storage, auth, fns: {
     collection, doc, addDoc, updateDoc, getDocs, getDoc,
     query, where, orderBy, limit, onSnapshot, serverTimestamp, increment,
-    ref, uploadBytes, getDownloadURL
+    ref, uploadBytes, getDownloadURL,
+    signInWithEmailAndPassword, signOut, updatePassword,
+    reauthenticateWithCredential, EmailAuthProvider
   }};
 </script>
 
@@ -97,8 +101,6 @@
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 body { font-family: var(--fs-sans); background: var(--white); color: var(--dark); overflow-x: hidden; -webkit-font-smoothing: antialiased; }
 img { display: block; max-width: 100%; height: auto; }
-/* Hero image needs full height — override the global height:auto */
-.hero-img img { height: 100% !important; max-width: none; }
 button { font-family: var(--fs-sans); cursor: pointer; }
 a { text-decoration: none; color: inherit; }
 ul { list-style: none; }
@@ -833,7 +835,7 @@ tbody td { padding: 12px 14px; color: var(--mid); font-weight: 300; vertical-ali
   <div class="nav-inner">
     <a class="nav-logo" href="/" aria-label="Forever Hotel Surat Homepage">
       <div class="logo-img-wrap" id="logoWrap">
-        <img src="forever.png" alt="Forever Hotel Logo" width="48" height="48"/>
+        <!-- Replace with: <img src="logo.png" alt="Forever Hotel Logo"/> when ready -->
         <span class="logo-letter" id="logoFallback">F</span>
       </div>
       <div class="logo-text">
@@ -910,7 +912,7 @@ tbody td { padding: 12px 14px; color: var(--mid); font-weight: 300; vertical-ali
   </div>
   <div class="hero-right" aria-hidden="true">
     <div class="hero-img">
-      <img src="https://images.unsplash.com/photo-1455587734955-081b22074882?w=900&q=80" alt="Forever Hotel Surat" loading="eager" fetchpriority="high" width="900" height="1200"/>
+      <img src="https://images.unsplash.com/photo-1455587734955-081b22074882?w=900&q=80" alt="Forever Hotel Surat" loading="eager" fetchpriority="high"/>
     </div>
     <div class="hero-stats">
       <div class="stat-item"><span class="stat-num">4.8</span><span class="stat-lbl">Guest Rating</span></div>
@@ -939,7 +941,7 @@ tbody td { padding: 12px 14px; color: var(--mid); font-weight: 300; vertical-ali
   <div class="section-inner">
     <div class="about-grid">
       <div class="fade-up" id="about-img-col">
-        <img class="about-img-main" src="https://images.unsplash.com/photo-1564501049412-61c2a3083791?w=700&q=80" alt="Forever Hotel lobby" loading="lazy" width="700" height="875"/>
+        <img class="about-img-main" src="https://images.unsplash.com/photo-1564501049412-61c2a3083791?w=700&q=80" alt="Forever Hotel lobby" loading="lazy"/>
       </div>
       <div class="fade-up">
         <div class="sec-label"><span>Our Story</span></div>
@@ -975,10 +977,10 @@ tbody td { padding: 12px 14px; color: var(--mid); font-weight: 300; vertical-ali
         <button class="btn btn-dark" style="margin-top:32px;font-size:11px;padding:15px 32px;" onclick="openBookingModal()">Reserve a Room →</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <img src="https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=500&q=80" alt="AC room at Forever Hotel Surat" loading="lazy" width="500" height="375" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);"/>
-        <img src="https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=500&q=80" alt="Forever Hotel Surat room interior" loading="lazy" width="500" height="375" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);margin-top:24px;"/>
-        <img src="https://images.unsplash.com/photo-1611892440504-42a792e24d32?w=500&q=80" alt="Clean comfortable room Forever Hotel" loading="lazy" width="500" height="375" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);margin-top:-24px;"/>
-        <img src="https://images.unsplash.com/photo-1540518614846-7eded433c457?w=500&q=80" alt="Forever Hotel room bathroom Surat" loading="lazy" width="500" height="375" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);"/>
+        <img src="https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=500&q=80" alt="AC room at Forever Hotel Surat" loading="lazy" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);"/>
+        <img src="https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=500&q=80" alt="Forever Hotel Surat room interior" loading="lazy" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);margin-top:24px;"/>
+        <img src="https://images.unsplash.com/photo-1611892440504-42a792e24d32?w=500&q=80" alt="Clean comfortable room Forever Hotel" loading="lazy" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);margin-top:-24px;"/>
+        <img src="https://images.unsplash.com/photo-1540518614846-7eded433c457?w=500&q=80" alt="Forever Hotel room bathroom Surat" loading="lazy" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);"/>
       </div>
     </div>
   </div>
@@ -2368,12 +2370,7 @@ function setLoginRole(role) {
   document.getElementById('loginErr').textContent = '';
 }
 
-// ── HARDCODED CREDENTIALS (no Firebase Auth needed) ──
-const TEAM_CREDENTIALS = [
-  { email: 'owner@foreverhotel.com', pass: 'owner123', role: 'owner', name: 'Hotel Owner' },
-  { email: 'staff@foreverhotel.com', pass: 'staff123', role: 'staff', name: 'Front Desk' }
-];
-
+// ── FIREBASE AUTH LOGIN ──
 async function doLogin() {
   const email = document.getElementById('loginEmail').value.trim().toLowerCase();
   const pass  = document.getElementById('loginPass').value;
@@ -2384,23 +2381,40 @@ async function doLogin() {
 
   setBtnLoading('loginBtn', true);
 
-  // Small delay so the loading spinner is visible
-  await new Promise(r => setTimeout(r, 400));
+  try {
+    const { auth, fns } = window._FB;
+    const result = await fns.signInWithEmailAndPassword(auth, email, pass);
+    const fbUser = result.user;
 
-  const user = TEAM_CREDENTIALS.find(
-    u => u.email === email && u.pass === pass && u.role === _selectedRole
-  );
+    // Determine role: owner email contains 'owner', everything else is staff
+    const role = email.includes('owner') ? 'owner' : 'staff';
+    const name = role === 'owner' ? 'Hotel Owner' : 'Front Desk';
 
-  if (!user) {
-    errEl.textContent = 'Invalid email or password, or wrong portal selected.';
-    setBtnLoading('loginBtn', false);
-    return;
+    // Check role matches selected portal tab
+    if (role !== _selectedRole) {
+      errEl.textContent = 'Wrong portal selected for this account.';
+      await fns.signOut(auth);
+      setBtnLoading('loginBtn', false);
+      return;
+    }
+
+    window._currentUser = { uid: fbUser.uid, email: fbUser.email, role, name };
+    _lsSet('fh_session', { user: window._currentUser, time: Date.now() });
+    closeLoginPage();
+    await openDashboard(window._currentUser);
+
+  } catch (error) {
+    if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+      errEl.textContent = 'Invalid email or password.';
+    } else if (error.code === 'auth/too-many-requests') {
+      errEl.textContent = 'Too many attempts. Please wait a few minutes and try again.';
+    } else if (error.code === 'auth/network-request-failed') {
+      errEl.textContent = 'No internet connection. Firebase Auth requires internet.';
+    } else {
+      errEl.textContent = 'Login failed: ' + (error.message || 'Unknown error');
+    }
   }
 
-  window._currentUser = { uid: email, email: user.email, role: user.role, name: user.name };
-  _lsSet('fh_session', { user: window._currentUser, time: Date.now() });
-  closeLoginPage();
-  await openDashboard(window._currentUser);
   setBtnLoading('loginBtn', false);
 }
 
@@ -2418,6 +2432,8 @@ async function doLogout() {
   if (_unsubscribeBookings) { _unsubscribeBookings(); _unsubscribeBookings = null; }
 
   // 4. Clear all state
+  // Sign out from Firebase Auth
+  try { if (window._FB?.auth) await window._FB.fns.signOut(window._FB.auth); } catch(e) {}
   window._currentUser = null;
   _bookingsCache = [];
   _payPopupQueue = [];
@@ -3197,7 +3213,7 @@ async function renderLogs() {
 }
 
 /* ── CHANGE PASSWORD — updates in-memory only (frontend credentials) ── */
-function changePass() {
+async function changePass() {
   const nw = document.getElementById('nPass').value;
   const cf = document.getElementById('cfPass').value;
   const err = document.getElementById('passErr');
@@ -3205,13 +3221,23 @@ function changePass() {
   err.textContent = ''; ok.style.display = 'none';
   if (nw.length < 8) { err.textContent = 'Password must be at least 8 characters.'; return; }
   if (nw !== cf) { err.textContent = 'Passwords do not match.'; return; }
-  // Update in TEAM_CREDENTIALS for the current session
-  const cred = TEAM_CREDENTIALS.find(u => u.email === window._currentUser?.email);
-  if (cred) cred.pass = nw;
-  ok.style.display = 'block';
-  document.getElementById('nPass').value = '';
-  document.getElementById('cfPass').value = '';
-  toast('Password updated for this session', 'success');
+
+  try {
+    const { auth, fns } = window._FB;
+    const fbUser = auth.currentUser;
+    if (!fbUser) { err.textContent = 'Session expired. Please log in again.'; return; }
+    await fns.updatePassword(fbUser, nw);
+    ok.style.display = 'block';
+    document.getElementById('nPass').value = '';
+    document.getElementById('cfPass').value = '';
+    toast('Password updated successfully in Firebase!', 'success');
+  } catch (error) {
+    if (error.code === 'auth/requires-recent-login') {
+      err.textContent = 'Please log out and log back in before changing your password.';
+    } else {
+      err.textContent = 'Failed to update password: ' + (error.message || 'Unknown error');
+    }
+  }
 }
 
 /* ── EXPORT CSV ── */
