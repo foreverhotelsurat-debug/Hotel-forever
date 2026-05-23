@@ -598,13 +598,13 @@ footer { background: var(--dark); padding: 64px 8% 36px; }
 .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
 .chart-box { background: var(--white); border: 1px solid var(--border); padding: 22px 20px; border-radius: var(--radius); }
 .chart-ttl { font-size: 10px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--light); margin-bottom: 16px; }
-.bar-chart { display: flex; align-items: flex-end; gap: 6px; height: 140px; }
-.bar-col { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; }
-.bar-fill { width: 100%; min-height: 4px; position: relative; cursor: pointer; transition: opacity var(--t); border-radius: 2px 2px 0 0; }
+.bar-chart { display: flex; align-items: flex-end; gap: 4px; height: 160px; padding-bottom: 24px; position: relative; box-sizing: border-box; }
+.bar-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: 1; min-width: 0; height: 100%; }
+.bar-fill { width: 100%; min-height: 2px; position: relative; cursor: pointer; transition: height .4s ease, opacity var(--t); border-radius: 3px 3px 0 0; }
 .bar-fill:hover { opacity: .8; }
 .bar-tip { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); background: var(--dark); color: #fff; font-size: 9px; padding: 3px 7px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 2; border-radius: 2px; }
 .bar-fill:hover .bar-tip { opacity: 1; }
-.bar-lbl { font-size: 8.5px; color: var(--light); margin-top: 5px; text-align: center; }
+.bar-lbl { font-size: 8px; color: var(--light); text-align: center; position: absolute; bottom: 2px; left: 0; right: 0; white-space: nowrap; overflow: hidden; }
 
 /* Tables */
 .sec-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
@@ -1183,6 +1183,26 @@ tbody td { padding: 12px 14px; color: var(--mid); font-weight: 300; vertical-ali
       <textarea id="bReq" placeholder="Any special requirements..." maxlength="500"></textarea>
     </div>
 
+    <!-- DIGITAL SIGNATURE -->
+    <div class="fg">
+      <label>Guest Signature <span style="font-size:9px;font-weight:300;text-transform:none;letter-spacing:0;color:var(--lighter);">(Sign with finger or stylus — stored securely)</span></label>
+      <div style="border:2px solid var(--border);border-radius:10px;overflow:hidden;background:#fafaf8;position:relative;">
+        <canvas id="sigCanvas" width="600" height="160"
+          style="width:100%;height:160px;display:block;cursor:crosshair;touch-action:none;"
+          onmousedown="sigStart(event)" onmousemove="sigMove(event)" onmouseup="sigEnd()"
+          ontouchstart="sigStart(event)" ontouchmove="sigMove(event)" ontouchend="sigEnd()">
+        </canvas>
+        <div id="sigPlaceholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
+          <span style="font-size:13px;color:var(--lighter);">✍️ Sign here</span>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+        <span style="font-size:11px;color:var(--lighter);">Draw your signature above</span>
+        <button type="button" onclick="sigClear()" style="font-size:11px;padding:4px 12px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;color:var(--dark);">🗑 Clear</button>
+      </div>
+      <div class="fg-err" id="sigErr">Please provide your signature</div>
+    </div>
+
     <div class="fg-err" id="bookGlobalErr" style="margin-bottom:12px;"></div>
     <button class="btn btn-gold btn-block" id="bookSubmitBtn" onclick="submitBooking()">
       <span class="btn-text">Confirm Booking Request</span>
@@ -1337,6 +1357,9 @@ tbody td { padding: 12px 14px; color: var(--mid); font-weight: 300; vertical-ali
   </div>
 
   <!-- Tabs — Owner sees more, Staff sees less -->
+  <!-- PENDING PAYMENT ALERTS BANNER — visible to owner + staff -->
+  <div id="pendingAlertBanner" style="display:none;"></div>
+
   <div class="dash-tabs" id="dashTabs">
     <button class="d-tab active" id="tab-overview" onclick="switchTab('overview')">📊 Overview</button>
     <button class="d-tab" id="tab-bookings" onclick="switchTab('bookings')">📋 Bookings</button>
@@ -1923,6 +1946,13 @@ function validateBookingForm() {
 async function submitBooking() {
   if (!validateBookingForm()) return;
 
+  // Signature validation
+  if (!window.sigHasSignature()) {
+    const sigErr = document.getElementById('sigErr');
+    if (sigErr) { sigErr.classList.add('show'); sigErr.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    return;
+  }
+
   // Hide any previous errors/success
   const errEl = document.getElementById('bookGlobalErr');
   errEl.textContent = ''; errEl.classList.remove('show');
@@ -1946,8 +1976,10 @@ async function submitBooking() {
     idType: document.getElementById('bIdType').value,
     idNum: sanitize(document.getElementById('bIdNum').value.trim()),
     idPhotoUrl: null, idPhotoUrls: [],
-    requests: sanitize(document.getElementById('bReq').value.trim()),
-    status: 'pending', amountReceived: null,
+    requests:       sanitize(document.getElementById('bReq').value.trim()),
+    signature:      window.sigGetDataUrl() || null,   // Base64 PNG — stored in Firestore
+    signedAt:       window.sigHasSignature() ? new Date().toISOString() : null,
+    status:         'pending', amountReceived: null,
     amountEnteredBy: null, amountEnteredAt: null,
     source: 'website', createdAt: new Date().toISOString()
   };
@@ -2537,6 +2569,7 @@ async function openDashboard(user) {
     if (document.getElementById('panel-bookings')?.classList.contains('active'))   renderBookings();
     if (document.getElementById('panel-payments')?.classList.contains('active'))   renderPayments();
     if (document.getElementById('panel-analytics')?.classList.contains('active'))  renderAnalytics();
+    renderPendingAlerts();
     // Update badge only — no floating popup
     checkPaymentPopup();
   });
@@ -2600,7 +2633,7 @@ function renderTable(tbodyId, bookings, compact = false) {
     return;
   }
   const isOwner = window._currentUser?.role === 'owner';
-  tbody.innerHTML = bookings.map(b => {
+  tbody.innerHTML = bookings.map((b, idx) => {
     const key = b.docId || b.id || '';
     const displayId = b.id || b.docId || '—';
     const sourceTag = b.source === 'walkin'
@@ -2619,22 +2652,40 @@ function renderTable(tbodyId, bookings, compact = false) {
       <td><span class="badge ${b.status}">${statusLabel(b.status)}</span></td>
       <td>${b.amountReceived !== null ? '<span style="color:var(--green);font-weight:500;">₹' + Number(b.amountReceived).toLocaleString('en-IN') + '</span>' : '<span style="color:var(--red);font-size:11px;">Pending</span>'}</td>
       <td>
-        <button class="act tbl-view-btn" data-key="${key}">View</button>
-        ${!compact ? `<button class="act tbl-status-btn" data-key="${key}">Status</button>` : ''}
-        ${isOwner && b.status !== 'cancelled' ? `<button class="act danger tbl-cancel-btn" data-key="${key}">Cancel</button>` : ''}
+        <button class="act tbl-view-btn" data-idx="${idx}">View</button>
+        ${!compact ? `<button class="act tbl-status-btn" data-idx="${idx}">Status</button>` : ''}
+        ${isOwner && b.status !== 'cancelled' ? `<button class="act danger tbl-cancel-btn" data-idx="${idx}">Cancel</button>` : ''}
       </td>
     </tr>`;
   }).join('');
 
-  // Attach events after render — avoids onclick string issues entirely
+  // Attach events — use numeric index to avoid ID escaping issues
   tbody.querySelectorAll('.tbl-view-btn').forEach(btn => {
-    btn.addEventListener('click', () => { if (!window._currentUser) return; viewBooking(btn.dataset.key); });
+    btn.addEventListener('click', () => {
+      if (!window._currentUser) return;
+      const idx = parseInt(btn.dataset.idx);
+      const b   = bookings[idx];
+      if (!b) return;
+      viewBooking(b.docId || b.id);
+    });
   });
   tbody.querySelectorAll('.tbl-status-btn').forEach(btn => {
-    btn.addEventListener('click', () => { if (!window._currentUser) return; changeStatus(btn.dataset.key); });
+    btn.addEventListener('click', () => {
+      if (!window._currentUser) return;
+      const idx = parseInt(btn.dataset.idx);
+      const b   = bookings[idx];
+      if (!b) return;
+      changeStatus(b.docId || b.id);
+    });
   });
   tbody.querySelectorAll('.tbl-cancel-btn').forEach(btn => {
-    btn.addEventListener('click', () => { if (!window._currentUser) return; cancelBooking(btn.dataset.key); });
+    btn.addEventListener('click', () => {
+      if (!window._currentUser) return;
+      const idx = parseInt(btn.dataset.idx);
+      const b   = bookings[idx];
+      if (!b) return;
+      cancelBooking(b.docId || b.id);
+    });
   });
 }
 
@@ -2711,16 +2762,47 @@ async function promptPayEntry(docId) {
       <span style="font-size:12px;">${fmtDate(b.checkin)} → ${fmtDate(b.checkout)} &nbsp;(${nights} night${nights>1?'s':''})</span><br>
       ${b.amountReceived !== null ? `<span style="color:var(--green);font-size:12px;">Current: ₹${Number(b.amountReceived).toLocaleString('en-IN')}</span>` : ''}
     </div>
-    <div class="fg">
+    <div class="fg" style="margin-bottom:8px;">
+      <label>Payment Mode</label>
+      <select id="payModeInp" style="font-size:14px;padding:10px;">
+        <option value="cash">💵 Cash</option>
+        <option value="bank">🏦 Bank / UPI / Online</option>
+        <option value="card">💳 Card</option>
+        <option value="pending">⏳ Pending (not yet received)</option>
+      </select>
+    </div>
+    <div class="fg" id="payAmtWrap">
       <label>Amount Received (₹)</label>
       <input type="number" id="payAmtInp" placeholder="Enter amount in ₹" min="0" step="0.01"
         value="${b.amountReceived || ''}" style="font-size:16px;padding:12px;"/>
     </div>
+    <div class="fg" id="payPendingNoteWrap" style="display:none;">
+      <label>Reason / Note <span style="font-weight:300;font-size:10px;">(optional)</span></label>
+      <input type="text" id="payPendingNote" placeholder="e.g. Will pay tomorrow, UPI failed..." maxlength="100" style="font-size:13px;padding:10px;"/>
+    </div>
     <div class="fg-err" id="payAmtErr" style="display:none;margin-top:6px;"></div>`;
+
+  // Toggle amount/note fields based on mode
+  setTimeout(() => {
+    const modeEl = document.getElementById('payModeInp');
+    if (modeEl) {
+      modeEl.value = b.paymentMode || 'cash';
+      modeEl.addEventListener('change', () => {
+        const isPending = modeEl.value === 'pending';
+        document.getElementById('payAmtWrap').style.display      = isPending ? 'none' : 'block';
+        document.getElementById('payPendingNoteWrap').style.display = isPending ? 'block' : 'none';
+      });
+      if (b.paymentMode === 'pending') {
+        document.getElementById('payAmtWrap').style.display       = 'none';
+        document.getElementById('payPendingNoteWrap').style.display = 'block';
+        modeEl.value = 'pending';
+      }
+    }
+  }, 50);
 
   document.getElementById('payEntryActions').innerHTML = `
     <button class="btn btn-gold" onclick="savePayEntry('${sanitize(docId)}')">
-      <span class="btn-text">💾 Save Payment</span>
+      <span class="btn-text">💾 Save</span>
     </button>
     <button class="act" onclick="closeModal('payEntryModal')">Cancel</button>`;
 
@@ -2732,41 +2814,74 @@ async function promptPayEntry(docId) {
 }
 
 async function savePayEntry(docId) {
-  // Support both input IDs (blocking popup uses payAmtInp, inline uses payEntryAmt)
   const amtInput = document.getElementById('payAmtInp') || document.getElementById('payEntryAmt');
-  const errEl = document.getElementById('payAmtErr') || document.getElementById('payEntryErr');
-  const n = parseFloat(amtInput?.value);
-  if (isNaN(n) || n < 0) {
-    if (errEl) { errEl.textContent = 'Please enter a valid amount (₹).'; errEl.style.display = 'block'; }
-    return;
-  }
+  const modeEl   = document.getElementById('payModeInp');
+  const noteEl   = document.getElementById('payPendingNote');
+  const errEl    = document.getElementById('payAmtErr') || document.getElementById('payEntryErr');
+  const mode     = modeEl?.value || 'cash';
+  const isPending = mode === 'pending';
+
   if (errEl) errEl.style.display = 'none';
 
-  const _savePayBtn = document.querySelector('#payEntryActions .btn-gold'); if (_savePayBtn) { _savePayBtn.disabled = true; _savePayBtn.classList.add('btn-loading'); }
+  // Validate amount only if NOT pending
+  let n = null;
+  if (!isPending) {
+    n = parseFloat(amtInput?.value);
+    if (isNaN(n) || n < 0) {
+      if (errEl) { errEl.textContent = 'Please enter a valid amount (₹).'; errEl.style.display = 'block'; }
+      return;
+    }
+  }
+
+  const _savePayBtn = document.querySelector('#payEntryActions .btn-gold');
+  if (_savePayBtn) { _savePayBtn.disabled = true; _savePayBtn.classList.add('btn-loading'); }
+
   try {
-    const b = _bookingsCache.find(x => (x.docId || x.id) === docId);
-    await fbUpdateBooking(docId, {
-      amountReceived: n,
-      amountEnteredBy: window._currentUser?.name || window._currentUser?.email || 'Staff',
+    const b     = _bookingsCache.find(x => (x.docId || x.id) === docId);
+    const byWho = window._currentUser?.name || window._currentUser?.email || 'Staff';
+    const note  = noteEl?.value?.trim() || '';
+
+    const updates = isPending ? {
+      amountReceived:  null,
+      paymentMode:     'pending',
+      pendingNote:     note,
+      pendingMarkedBy: byWho,
+      pendingMarkedAt: new Date().toISOString(),
+      status:          b?.status || 'confirmed',
+      // ── Alert flag — both owner and staff see this ──
+      pendingAlert:    true,
+      pendingAlertMsg: `💳 Payment pending for ${b?.name || 'Guest'} · Booking ${b?.id} · Marked by ${byWho}${note ? ' — ' + note : ''}`,
+      pendingAlertAt:  new Date().toISOString(),
+    } : {
+      amountReceived:  n,
+      paymentMode:     mode,
+      pendingNote:     '',
+      pendingAlert:    false,   // clear alert once paid
+      amountEnteredBy: byWho,
       amountEnteredAt: new Date().toISOString(),
-      status: 'confirmed'
-    });
-    await fbLogActivity('payment_entry', `Entered ₹${n} for booking ${b?.id}`);
+      status:          'confirmed',
+    };
+
+    await fbUpdateBooking(docId, updates);
+
+    if (isPending) {
+      await fbLogActivity('payment_pending', `Payment marked PENDING for ${b?.name} (${b?.id}) by ${byWho}${note ? ' — ' + note : ''}`);
+      toast(`⏳ Marked as Pending — alert sent to Owner & Staff`, 'warning', 5000);
+    } else {
+      await fbLogActivity('payment_entry', `₹${n} received via ${mode} for booking ${b?.id} by ${byWho}`);
+      toast(`✅ ₹${Number(n).toLocaleString('en-IN')} recorded successfully!`, 'success');
+    }
 
     closeModal('payEntryModal');
     closeModal('detailModal');
-
-    // Restore close button for next time
     const closeBtn = document.getElementById('payEntryCloseBtn');
     if (closeBtn) closeBtn.style.display = '';
 
-    toast(`✅ ₹${Number(n).toLocaleString('en-IN')} recorded — booking confirmed!`, 'success');
-
-    // Re-check: show popup again if more pending bookings remain
-    setTimeout(() => checkPaymentPopup(), 800);
+    setTimeout(() => { checkPaymentPopup(); renderPendingAlerts(); }, 800);
   } catch(e) {
     if (errEl) { errEl.textContent = 'Failed to save. Try again.'; errEl.style.display = 'block'; }
-    const _spBtn = document.querySelector('#payEntryActions .btn-gold'); if (_spBtn) { _spBtn.disabled = false; _spBtn.classList.remove('btn-loading'); }
+    const _spBtn = document.querySelector('#payEntryActions .btn-gold');
+    if (_spBtn) { _spBtn.disabled = false; _spBtn.classList.remove('btn-loading'); }
     console.error('savePayEntry error:', e);
   }
 }
@@ -2791,16 +2906,33 @@ function checkPaymentPopup() {
   document.getElementById('payEntryBody').innerHTML = `
     <div style="background:#FEF9E7;border:1px solid #F9E79F;border-radius:6px;padding:12px 14px;margin-bottom:16px;">
       <div style="font-size:12px;font-weight:600;color:#7D6608;">⚠️ Payment Entry Required</div>
-      <div style="font-size:11px;color:#7D6608;margin-top:3px;">${pending.length} booking${pending.length>1?'s':''} need amount entry. You cannot proceed until this is recorded.</div>
+      <div style="font-size:11px;color:#7D6608;margin-top:3px;">${pending.length} booking${pending.length>1?'s':''} need payment entry. Enter amount received or mark as pending.</div>
     </div>
     <div style="font-size:13px;color:var(--light);margin-bottom:14px;">
       <strong>${sanitize(b.name)}</strong> &nbsp;·&nbsp;
       <code style="font-family:monospace;color:var(--gold);font-size:11px;">${sanitize(b.id)}</code><br>
       <span style="font-size:12px;">${fmtDate(b.checkin)} → ${fmtDate(b.checkout)} &nbsp;(${nights} night${nights>1?'s':''})</span>
     </div>
-    <div class="fg">
+    <div class="fg" style="margin-bottom:8px;">
+      <label>Payment Mode</label>
+      <select id="payModeInp" style="font-size:14px;padding:10px;" onchange="
+        const isPend = this.value==='pending';
+        document.getElementById('payAmtWrap').style.display = isPend?'none':'block';
+        document.getElementById('payPendingNoteWrap').style.display = isPend?'block':'none';
+      ">
+        <option value="cash">💵 Cash</option>
+        <option value="bank">🏦 Bank / UPI / Online</option>
+        <option value="card">💳 Card</option>
+        <option value="pending">⏳ Pending (not yet received)</option>
+      </select>
+    </div>
+    <div class="fg" id="payAmtWrap">
       <label>Amount Received (₹)</label>
       <input type="number" id="payAmtInp" placeholder="Enter amount in ₹" min="0" step="0.01" style="font-size:16px;padding:12px;"/>
+    </div>
+    <div class="fg" id="payPendingNoteWrap" style="display:none;">
+      <label>Reason / Note <span style="font-weight:300;font-size:10px;">(optional)</span></label>
+      <input type="text" id="payPendingNote" placeholder="e.g. Will pay tomorrow, UPI failed..." maxlength="100" style="font-size:13px;padding:10px;"/>
     </div>
     <div class="fg-err" id="payAmtErr" style="margin-top:6px;"></div>`;
 
@@ -2831,53 +2963,189 @@ function updateNotifBadge(n) {
     c.classList.add('hidden');
     if (d) d.style.display = 'none';
   }
+  renderPendingAlerts();
+}
+
+/* ── PENDING PAYMENT ALERT BANNER — shown to both Owner & Staff ── */
+function renderPendingAlerts() {
+  const banner = document.getElementById('pendingAlertBanner');
+  if (!banner) return;
+
+  // All bookings with pendingAlert = true
+  const alerts = _bookingsCache.filter(b =>
+    b.pendingAlert === true && b.status !== 'cancelled'
+  );
+
+  if (!alerts.length) {
+    banner.style.display = 'none';
+    banner.innerHTML = '';
+    return;
+  }
+
+  banner.style.display = 'block';
+  banner.innerHTML = `
+    <div style="
+      background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+      border-left: 4px solid #F59E0B;
+      border-bottom: 1px solid #FCD34D;
+      padding: 10px 16px;
+      margin-bottom: 4px;
+    ">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="font-size:16px;">🔔</span>
+        <span style="font-size:12px;font-weight:700;color:#92400E;letter-spacing:.02em;">
+          ${alerts.length} PENDING PAYMENT${alerts.length > 1 ? 'S' : ''} — Action Required
+        </span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        ${alerts.map(b => `
+          <div style="
+            background:rgba(255,255,255,.7);
+            border:1px solid #FCD34D;
+            border-radius:6px;
+            padding:7px 10px;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            flex-wrap:wrap;
+            gap:6px;
+            font-size:12px;
+          ">
+            <div>
+              <code style="font-family:monospace;color:#B45309;font-weight:600;">${sanitize(b.id)}</code>
+              &nbsp;·&nbsp;
+              <strong>${sanitize(b.name)}</strong>
+              &nbsp;·&nbsp;
+              ${fmtDate(b.checkin)}
+              ${b.pendingNote ? `<br><span style="color:#92400E;font-size:11px;">📝 ${sanitize(b.pendingNote)}</span>` : ''}
+              ${b.pendingMarkedBy ? `<br><span style="color:#92400E;font-size:10px;">Marked by ${sanitize(b.pendingMarkedBy)} · ${b.pendingAlertAt ? new Date(b.pendingAlertAt).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'}) : ''}</span>` : ''}
+            </div>
+            ${window._currentUser?.role === 'staff' || window._currentUser?.role === 'owner' ? `
+            <button onclick="promptPayEntry('${b.docId || b.id}')"
+              style="font-size:11px;padding:5px 12px;background:#F59E0B;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;white-space:nowrap;">
+              💳 Enter Payment
+            </button>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
 }
 
 /* ── VIEW BOOKING DETAIL ── */
 function viewBooking(docId) {
-  const b = _bookingsCache.find(x => (x.docId || x.id) === docId);
-  if (!b) return;
-  const nights = calcNights(b.checkin, b.checkout);
-  document.getElementById('detailBody').innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 28px;font-size:13px;line-height:1.9;">
-      ${[
-        ['Booking ID', `<code style="font-family:monospace;color:var(--gold);font-size:12px;">${sanitize(b.id)}</code>`],
-        ['Status', `<span class="badge ${b.status}">${statusLabel(b.status)}</span>`],
-        ['Guest Name', sanitize(b.name)],
-        ['Phone', sanitize(b.phone)],
-        ['Email', sanitize(b.email || '—')],
-        ['Room Type', b.roomType ? (b.roomType.charAt(0).toUpperCase() + b.roomType.slice(1)) + (b.room ? ' — ' + sanitize(b.room) : '') : (b.room ? sanitize(b.room) : '—')],
-        ['Guests', sanitize(b.guests)],
-        ['Check-in', fmtDate(b.checkin) + (b.checkinTime ? ' at ' + b.checkinTime : '')],
-        ['Check-out', fmtDate(b.checkout) + (b.checkoutTime ? ' at ' + b.checkoutTime : '')],
-        ['Nights', nights],
-        ['ID Proof', `${sanitize(b.idType || '—')} — ${sanitize(b.idNum || '—')}`],
-        ['Source', sanitize(b.source || 'website')],
-        ['Amount Received', b.amountReceived !== null ? `<strong style="color:var(--green);">₹${Number(b.amountReceived).toLocaleString('en-IN')}</strong>` : '<span style="color:var(--red);">Not entered</span>'],
-        ['Entered By', sanitize(b.amountEnteredBy || '—')],
-        ['Booking Date', sanitize(b.createdAt ? b.createdAt.split('T')[0] : '—')],
-      ].map(([l, v]) => `<div><span style="font-size:9px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);">${l}</span><br>${v}</div>`).join('')}
-      ${b.requests ? `<div style="grid-column:1/-1;"><span style="font-size:9px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);">Special Requests</span><br>${sanitize(b.requests)}</div>` : ''}
-      ${b.idPhotoUrl || (b.idPhotoUrls && b.idPhotoUrls.length) ? `<div style="grid-column:1/-1;"><span style="font-size:9px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);">Guest ID Photos</span><br>
-        ${(b.idPhotoUrls || [b.idPhotoUrl]).filter(Boolean).map((url, idx) =>
-          url.startsWith('local://') ? `<span style="font-size:12px;color:var(--lighter);">Guest ${idx+1}: Saved locally</span><br>` :
-          `<a href="${url}" target="_blank" style="color:var(--blue);margin-right:12px;">Guest ${idx+1} Photo ↗</a>`
-        ).join('')}
-        </div>` : ''}
-    </div>`;
+  try {
+    // Lookup by docId first (Firestore ID), then by FH- booking id
+    const b = _bookingsCache.find(x => x.docId === docId)
+           || _bookingsCache.find(x => x.id    === docId)
+           || _bookingsCache.find(x => (x.docId || x.id) === docId);
+    if (!b) { console.warn('viewBooking: not found', docId, _bookingsCache.map(x=>({docId:x.docId,id:x.id}))); toast('Booking not found', 'error'); return; }
 
-  const isOwner = window._currentUser?.role === 'owner';
-  const isStaff = window._currentUser?.role === 'staff';
-  const waText = encodeURIComponent(
-    `*Forever Hotel Surat — Booking*\nID: ${b.id}\nGuest: ${b.name}\nPhone: ${b.phone}\nCheck-in: ${fmtDate(b.checkin)}\nCheck-out: ${fmtDate(b.checkout)}\nGuests: ${b.guests}\nStatus: ${statusLabel(b.status)}\nPayment: ${b.amountReceived !== null ? '₹'+Number(b.amountReceived).toLocaleString('en-IN') : 'Pending'}`
-  );
-  document.getElementById('detailActions').innerHTML = `
-    <button class="act" onclick="closeModal('detailModal');changeStatus('${sanitize(docId)}')">Change Status</button>
-    ${isStaff && b.status !== 'cancelled' ? `<button class="btn btn-gold btn-sm" onclick="closeModal('detailModal');promptPayEntry('${sanitize(docId)}')">${b.amountReceived !== null ? 'Edit Amount' : 'Enter Amount'}</button>` : ''}
-    <button class="act" onclick="downloadBookingDetail('${sanitize(docId)}')">⬇️ Download</button>
-    <a href="https://wa.me/919714521209?text=${waText}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:#25D366;color:#fff;padding:7px 14px;border-radius:4px;font-size:10px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;text-decoration:none;">📲 WhatsApp</a>
-    ${isOwner && b.status !== 'cancelled' ? `<button class="act danger" onclick="closeModal('detailModal');cancelBooking('${sanitize(docId)}')">Cancel Booking</button>` : ''}`;
-  openModal('detailModal');
+    const nights = calcNights(b.checkin, b.checkout);
+
+    // Safe createdAt — handle Firestore Timestamp, string, or Date
+    let createdAtStr = '—';
+    try {
+      if (b.createdAt) {
+        if (typeof b.createdAt.toDate === 'function') createdAtStr = b.createdAt.toDate().toISOString().split('T')[0];
+        else if (typeof b.createdAt === 'string')     createdAtStr = b.createdAt.slice(0, 10);
+        else if (b.createdAt instanceof Date)         createdAtStr = b.createdAt.toISOString().split('T')[0];
+      }
+    } catch(e) {}
+
+    const rows = [
+      ['Booking ID',      `<code style="font-family:monospace;color:var(--gold);font-size:12px;">${sanitize(b.id || b.docId)}</code>`],
+      ['Original Ref #',  b.origBookingRef ? sanitize(b.origBookingRef) : null],
+      ['Status',          `<span class="badge ${b.status||''}">${statusLabel(b.status)}</span>`],
+      ['Guest Name',      sanitize(b.name || '—')],
+      ['Phone',           sanitize(b.phone || '—')],
+      ['Email',           sanitize(b.email || '—')],
+      ['Room',            b.roomType ? (b.roomType.charAt(0).toUpperCase()+b.roomType.slice(1)) + (b.room ? ' — ' + sanitize(b.room) : '') : sanitize(b.room || '—')],
+      ['Guests',          sanitize(b.guests || '—')],
+      ['Check-in',        fmtDate(b.checkin) + (b.checkinTime ? ' at ' + b.checkinTime : '')],
+      ['Check-out',       fmtDate(b.checkout) + (b.checkoutTime ? ' at ' + b.checkoutTime : '')],
+      ['Duration',        b.duration || (nights + ' night' + (nights !== 1 ? 's' : ''))],
+      ['ID Proof',        sanitize((b.idType || '') + (b.idNum ? ' — ' + b.idNum : '')) || '—'],
+      ['Payment Mode',    sanitize(b.paymentMode || '—')],
+      ['Amount Received', b.amountReceived != null ? `<strong style="color:var(--green);">₹${Number(b.amountReceived).toLocaleString('en-IN')}</strong>` : '<span style="color:var(--red);">Not entered</span>'],
+      ['Cash',            b.cashAmount != null ? '₹' + Number(b.cashAmount).toLocaleString('en-IN') : null],
+      ['Bank/UPI',        b.bankAmount != null ? '₹' + Number(b.bankAmount).toLocaleString('en-IN') : null],
+      ['Pending',         b.pendingAmount != null && b.pendingAmount > 0 ? '<span style="color:var(--red);">₹' + Number(b.pendingAmount).toLocaleString('en-IN') + '</span>' : null],
+      ['Entered By',      sanitize(b.amountEnteredBy || '—')],
+      ['Source',          sanitize(b.source || 'website')],
+      ['Booking Date',    createdAtStr],
+    ].filter(([, v]) => v !== null);
+
+    const detailBody = document.getElementById('detailBody');
+    detailBody.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 28px;font-size:13px;line-height:1.9;">
+        ${rows.map(([l, v]) => `<div><span style="font-size:9px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);">${l}</span><br>${v}</div>`).join('')}
+        ${b.requests ? `<div style="grid-column:1/-1;"><span style="font-size:9px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);">Special Requests</span><br>${sanitize(b.requests)}</div>` : ''}
+        ${b.pendingNote ? `<div style="grid-column:1/-1;"><span style="font-size:9px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);">Pending Reason</span><br><span style="color:var(--red);">${sanitize(b.pendingNote)}</span></div>` : ''}
+        ${b.signature ? `<div style="grid-column:1/-1;"><span style="font-size:9px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);">Guest Signature</span><br><img src="${b.signature}" style="max-width:220px;border:1px solid var(--border);border-radius:6px;padding:4px;background:#fff;margin-top:4px;" alt="Signature"/></div>` : ''}
+        ${b.idPhotoUrl || (b.idPhotoUrls && b.idPhotoUrls.length) ? `<div style="grid-column:1/-1;"><span style="font-size:9px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);">Guest ID Photos</span><br>
+          ${(b.idPhotoUrls || [b.idPhotoUrl]).filter(Boolean).map((url, i) =>
+            url.startsWith('local://') ? `<span style="font-size:12px;color:var(--lighter);">Guest ${i+1}: Saved locally</span><br>` :
+            `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:var(--blue);margin-right:12px;">Guest ${i+1} Photo ↗</a>`
+          ).join('')}</div>` : ''}
+      </div>`;
+
+    // ── Build actions using DOM (not innerHTML with onclick strings) ──
+    const isOwner = window._currentUser?.role === 'owner';
+    const isStaff = window._currentUser?.role === 'staff';
+    const actions = document.getElementById('detailActions');
+    actions.innerHTML = '';
+    window._currentDetailDocId = docId;
+
+    const mkBtn = (cls, text, fn) => {
+      const btn = document.createElement('button');
+      btn.className = cls; btn.innerHTML = text;
+      btn.addEventListener('click', fn);
+      return btn;
+    };
+
+    // Change Status
+    actions.appendChild(mkBtn('act', 'Change Status', () => { closeModal('detailModal'); changeStatus(docId); }));
+
+    // Enter / Edit Amount
+    if ((isStaff || isOwner) && b.status !== 'cancelled') {
+      actions.appendChild(mkBtn('btn btn-gold btn-sm', b.amountReceived != null ? 'Edit Amount' : 'Enter Amount', () => { closeModal('detailModal'); promptPayEntry(docId); }));
+    }
+
+    // Room No.
+    if (isStaff || isOwner) {
+      actions.appendChild(mkBtn('act', '🚪 Room No.', () => { openRoomAssign(docId, b.room || '', b.roomType || 'regular'); }));
+    }
+
+    // Download
+    actions.appendChild(mkBtn('act', '⬇️ Download', () => { downloadBookingDetail(docId); }));
+
+    // WhatsApp
+    const waMsg = `*Forever Hotel Surat — Booking*
+ID: ${b.id}
+Guest: ${b.name}
+Phone: ${b.phone}
+Check-in: ${fmtDate(b.checkin)}
+Check-out: ${fmtDate(b.checkout)}
+Guests: ${b.guests || ''}
+Status: ${statusLabel(b.status)}
+Payment: ${b.amountReceived != null ? '₹' + Number(b.amountReceived).toLocaleString('en-IN') : 'Pending'}`;
+    const waLink = document.createElement('a');
+    waLink.href = 'https://wa.me/919714521209?text=' + encodeURIComponent(waMsg);
+    waLink.target = '_blank'; waLink.rel = 'noopener noreferrer';
+    waLink.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:#25D366;color:#fff;padding:7px 14px;border-radius:4px;font-size:10px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;text-decoration:none;';
+    waLink.innerHTML = '📲 WhatsApp';
+    actions.appendChild(waLink);
+
+    // Cancel (owner only)
+    if (isOwner && b.status !== 'cancelled') {
+      actions.appendChild(mkBtn('act danger', 'Cancel Booking', () => { closeModal('detailModal'); cancelBooking(docId); }));
+    }
+
+    openModal('detailModal');
+  } catch(err) {
+    console.error('viewBooking error:', err);
+    toast('Error loading booking details. Check console.', 'error');
+  }
 }
 
 async function changeStatus(docId) {
@@ -3242,17 +3510,23 @@ function buildBarChart(containerId, data, labels, color = 'var(--gold)', suffix 
   if (!el) return;
   const max = Math.max(...data, 1);
   if (data.every(v => v === 0)) {
-    el.innerHTML = '<div style="text-align:center;padding:30px 0;color:var(--lighter);font-size:12px;">No data for this period</div>';
+    el.innerHTML = '<div style="width:100%;text-align:center;padding:30px 0;color:var(--lighter);font-size:12px;align-self:center;">No data for this period</div>';
     return;
   }
-  el.innerHTML = data.map((v, i) =>
-    `<div class="bar-col">
-      <div class="bar-fill" style="height:${Math.max((v/max)*100, v > 0 ? 4 : 0)}%;background:${color}">
-        <div class="bar-tip">${suffix === '₹' ? '₹' + Number(v).toLocaleString('en-IN') : v}</div>
+  // Use inline pixel height based on container (136px usable = 160 - 24 padding)
+  const CHART_H = 136;
+  el.innerHTML = data.map((v, i) => {
+    const pxH  = v > 0 ? Math.max(Math.round((v / max) * CHART_H), 4) : 0;
+    const label = suffix === '₹' ? '₹' + Number(v).toLocaleString('en-IN') : String(v);
+    return `<div class="bar-col">
+      <div class="bar-fill" style="height:${pxH}px;background:${color};">
+        <div class="bar-tip">${label}</div>
       </div>
-      <div class="bar-lbl">${labels[i]}</div>
-    </div>`
-  ).join('');
+      <div class="bar-lbl" style="position:absolute;bottom:2px;font-size:8px;">${labels[i]}</div>
+    </div>`;
+  }).join('');
+  // Position labels absolutely below bars
+  el.style.position = 'relative';
 }
 
 function buildWeekChart(all) {
@@ -3504,313 +3778,476 @@ document.querySelectorAll('.fade-up').forEach(el => _obs.observe(el));
 })();
 
 /* ══════════════════════════════════════
-   EXCEL IMPORT
+   EXCEL IMPORT — Forever Hotel
+   Exact columns: # | NO | NAME | CONTACT NO | PERSON | RENT | CASH | PENDING | BANK | RES | DATE | TIME | C/IN | C/OUT
 ══════════════════════════════════════ */
-let _xlRows=[], _xlHeaders=[];
-const XL_FIELDS=[
-  {key:'origId',   label:'Booking # ( # )',          required:false},
-  {key:'room',     label:'Room No. ( NO )',           required:false},
-  {key:'name',     label:'Guest Name ( CONTACT NO )',  required:true},
-  {key:'phone',    label:'Phone ( CONTACT NO 2nd ) ', required:false},
-  {key:'persons',  label:'Person / Pax ( PERSON )',   required:false},
-  {key:'amount',   label:'Rent Amount ( RENT )',       required:false},
-  {key:'cash',     label:'Cash Amount ( CASH )',       required:false},
-  {key:'pending',  label:'Pending Amount ( PENDING )',required:false},
-  {key:'bank',     label:'Bank/UPI Amount ( BANK )',  required:false},
-  {key:'date',     label:'Entry Date ( DATE ) *',     required:true},
-  {key:'duration', label:'Duration ( TIME )',         required:false},
-  {key:'checkin',  label:'Check-in Time ( C/IN ) *',  required:true},
-  {key:'checkout', label:'Check-out Time ( C/OUT ) *',required:true},
-];
-function openExcelImport(){
-  ['xlMappingSection','xlProgressSection','xlResultSection'].forEach(id=>document.getElementById(id).style.display='none');
-  document.getElementById('xlDropZone').style.display='block';
-  document.getElementById('xlFileInput').value='';
-  _xlRows=[];_xlHeaders=[];
+let _xlRows = [], _xlHeaders = [];
+
+function openExcelImport() {
+  ['xlMappingSection','xlProgressSection','xlResultSection'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  document.getElementById('xlDropZone').style.display = 'block';
+  document.getElementById('xlFileInput').value = '';
+  _xlRows = []; _xlHeaders = [];
   openModal('excelImportModal');
 }
-function xlDragOver(e){e.preventDefault();document.getElementById('xlDropZone').style.background='#fef9ec';document.getElementById('xlDropZone').style.borderColor='#b8860b';}
-function xlDragLeave(e){document.getElementById('xlDropZone').style.background='var(--gold-pale)';document.getElementById('xlDropZone').style.borderColor='var(--gold)';}
-function xlDrop(e){e.preventDefault();xlDragLeave(e);const f=e.dataTransfer.files[0];if(f)xlProcessFile(f);}
-function xlFileChosen(e){const f=e.target.files[0];if(f)xlProcessFile(f);}
-function xlProcessFile(file){
-  if(!file.name.match(/\.xlsx?$/i)){toast('Please upload .xlsx or .xls','error');return;}
-  const r=new FileReader();
-  r.onload=function(e){
-    try{
-      /* Read with cellDates:false so time-only cells come as decimal fractions
-         (e.g. 0.458 for 11:00), not as JS Date with year 1899.
-         We handle all date/time parsing ourselves below. */
-      const wb=XLSX.read(e.target.result,{type:'array',cellDates:false});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      /* raw:false → formatted strings; we re-parse them ourselves */
-      const json=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
-      /* Filter out header-repeat rows and empty rows */
-      const dataRows=json.filter(row=>{
-        const vals=Object.values(row);
-        const hasData=vals.some(v=>v!==null&&v!==''&&v!==undefined);
-        /* Skip rows where the first non-empty cell looks like a column header */
-        const first=String(vals[0]||'').trim().toLowerCase();
-        const isHeader=(first==='#'||first==='no'||first==='sr'||first==='date');
-        return hasData&&!isHeader;
-      });
-      if(!dataRows.length){toast('No data rows found in file','error');return;}
-      _xlRows=dataRows;_xlHeaders=Object.keys(json[0]);xlShowMapping();
-    }catch(err){toast('Could not read file: '+err.message,'error');}
+
+function xlDragOver(e)  { e.preventDefault(); document.getElementById('xlDropZone').style.background = '#fef9ec'; document.getElementById('xlDropZone').style.borderColor = '#b8860b'; }
+function xlDragLeave(e) { document.getElementById('xlDropZone').style.background = 'var(--gold-pale)'; document.getElementById('xlDropZone').style.borderColor = 'var(--gold)'; }
+function xlDrop(e)      { e.preventDefault(); xlDragLeave(e); const f = e.dataTransfer.files[0]; if (f) xlProcessFile(f); }
+function xlFileChosen(e){ const f = e.target.files[0]; if (f) xlProcessFile(f); }
+
+function xlProcessFile(file) {
+  if (!file.name.match(/\.xlsx?$/i)) { toast('Please upload .xlsx or .xls file', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb   = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+      // Try each sheet
+      let json = [], headerRow = -1, sheetUsed = '';
+      for (const sheetName of wb.SheetNames) {
+        const ws   = wb.Sheets[sheetName];
+        const raw  = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        // Find header row — look for row containing '#' and 'NO' and 'C/IN' or 'C/OUT'
+        for (let i = 0; i < Math.min(raw.length, 15); i++) {
+          const r = raw[i].map(v => String(v).trim().toUpperCase());
+          if (r.includes('#') && (r.includes('C/IN') || r.includes('C/OUT') || r.includes('NO'))) {
+            headerRow = i;
+            // Build json with this as header
+            const headers = raw[i].map(v => String(v).trim());
+            json = raw.slice(i + 1)
+              .filter(row => row.some(v => v !== '' && v !== null && v !== undefined))
+              .map(row => {
+                const obj = {};
+                headers.forEach((h, idx) => { obj[h] = row[idx] ?? ''; });
+                return obj;
+              });
+            sheetUsed = sheetName;
+            break;
+          }
+        }
+        if (json.length) break;
+      }
+
+      if (!json.length) {
+        toast('Could not find booking data. Make sure header row has #, NO, C/IN, C/OUT columns.', 'error');
+        return;
+      }
+
+      _xlRows    = json;
+      _xlHeaders = Object.keys(json[0] || {});
+      xlShowPreview(sheetUsed);
+    } catch(err) {
+      toast('Could not read file: ' + err.message, 'error');
+      console.error(err);
+    }
   };
-  r.readAsArrayBuffer(file);
+  reader.readAsArrayBuffer(file);
 }
-function xlShowMapping(){
-  document.getElementById('xlDropZone').style.display='none';
-  const autoMap={};
-  const norm=h=>String(h).toLowerCase().replace(/[^a-z0-9]/g,'');
-  /* Build an ordered list of headers so we can map by position for duplicate names */
-  const hList=_xlHeaders;
-  /* Track which headers have already been auto-mapped to avoid double-use */
-  const used=new Set();
-  hList.forEach((h,i)=>{
-    const n=norm(h);
-    /* Booking # → first column '#' */
-    if(!autoMap.origId&&!used.has(h)&&(n==='#'||n==='sr'||n==='srno'||n==='bookingid')){autoMap.origId=h;used.add(h);}
-    /* Room No → 'NO' */
-    if(!autoMap.room&&!used.has(h)&&(n==='no'||n==='roomno'||n==='room')){autoMap.room=h;used.add(h);}
-    /* Guest Name → first 'CONTACT NO' column (index ~2) */
-    if(!autoMap.name&&!used.has(h)&&(n==='contactno'||n.includes('contact')||n==='name'||n==='guestname')){autoMap.name=h;used.add(h);}
-    /* Phone → second 'CONTACT NO' column */
-    if(!autoMap.phone&&!used.has(h)&&(n==='contactno'||n.includes('contact')||n.includes('phone')||n.includes('mobile'))){autoMap.phone=h;used.add(h);}
-    /* Person count */
-    if(!autoMap.persons&&!used.has(h)&&(n==='person'||n==='persons'||n==='pax'||n==='noof')){autoMap.persons=h;used.add(h);}
-    /* Rent / total amount */
-    if(!autoMap.amount&&!used.has(h)&&(n==='rent'||n==='amount'||n==='total'||n==='rate'||n==='price')){autoMap.amount=h;used.add(h);}
-    /* Cash */
-    if(!autoMap.cash&&!used.has(h)&&n==='cash'){autoMap.cash=h;used.add(h);}
-    /* Pending */
-    if(!autoMap.pending&&!used.has(h)&&n==='pending'){autoMap.pending=h;used.add(h);}
-    /* Bank / UPI */
-    if(!autoMap.bank&&!used.has(h)&&(n==='bank'||n==='upi'||n==='online')){autoMap.bank=h;used.add(h);}
-    /* Entry Date */
-    if(!autoMap.date&&!used.has(h)&&(n==='date'||n==='entrydate'||n==='bookingdate')){autoMap.date=h;used.add(h);}
-    /* Duration label like '2hr' */
-    if(!autoMap.duration&&!used.has(h)&&(n==='time'||n==='duration'||n==='hrs')){autoMap.duration=h;used.add(h);}
-    /* C/IN check-in time */
-    if(!autoMap.checkin&&!used.has(h)&&(n==='cin'||n==='checkin'||n==='arrival'||n==='from')){autoMap.checkin=h;used.add(h);}
-    /* C/OUT check-out time */
-    if(!autoMap.checkout&&!used.has(h)&&(n==='cout'||n==='checkout'||n==='departure'||n==='to')){autoMap.checkout=h;used.add(h);}
-  });
-  const grid=document.getElementById('xlMappingGrid');
-  grid.innerHTML=XL_FIELDS.map(f=>`<div style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11px;font-weight:600;color:var(--dark);">${f.label}</label><select id="xlmap_${f.key}" style="font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;"><option value="">— Skip —</option>${_xlHeaders.map(h=>`<option value="${h}"${autoMap[f.key]===h?' selected':''}>${h}</option>`).join('')}</select></div>`).join('');
-  /* Show ALL columns in preview */
-  const prev=_xlRows.slice(0,3);
-  const pc=_xlHeaders;
-  const tbl=`<div style="overflow-x:auto;margin-top:8px;"><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr>${pc.map(h=>`<th style="padding:4px 6px;background:#f5f5f0;border:1px solid #e0ddd5;white-space:nowrap;">${h}</th>`).join('')}</tr></thead><tbody>${prev.map(r=>`<tr>${pc.map(c=>`<td style="padding:4px 6px;border:1px solid #e0ddd5;white-space:nowrap;">${r[c]??''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
-  document.getElementById('xlPreviewInfo').innerHTML=`✅ <strong>${_xlRows.length} rows</strong> found. Preview (all columns):${tbl}`;
-  document.getElementById('xlMappingSection').style.display='block';
-}
-function xlGetMapping(){const map={};XL_FIELDS.forEach(f=>{const el=document.getElementById('xlmap_'+f.key);if(el&&el.value)map[f.key]=el.value;});return map;}
 
-/* Parse a date-only cell → 'YYYY-MM-DD'
-   Handles: JS Date objects, Excel serial numbers, 'DD/MM/YYYY', 'YYYY-MM-DD', text dates */
-function xlParseDate(val){
-  if(val===null||val===undefined||val==='')return null;
-  /* JS Date object (from cellDates:true mode, kept for safety) */
-  if(val instanceof Date){
-    if(isNaN(val.getTime()))return null;
-    /* Reject year 1899/1900 which means Excel time-only serial */
-    if(val.getFullYear()<1970)return null;
-    return `${val.getFullYear()}-${String(val.getMonth()+1).padStart(2,'0')}-${String(val.getDate()).padStart(2,'0')}`;
+function xlFmtTime(val) {
+  if (!val) return '';
+  // JS Date object (from cellDates)
+  if (val instanceof Date) {
+    return String(val.getHours()).padStart(2,'0') + ':' + String(val.getMinutes()).padStart(2,'0');
   }
-  const s=String(val).trim();
-  if(!s)return null;
-  /* ISO YYYY-MM-DD */
-  const iso=s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
-  if(iso)return `${iso[1]}-${iso[2].padStart(2,'0')}-${iso[3].padStart(2,'0')}`;
-  /* DD/MM/YYYY or DD-MM-YYYY */
-  const dmy=s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})/);
-  if(dmy){const yr=dmy[3].length===2?'20'+dmy[3]:dmy[3];return `${yr}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;}
-  /* Pure Excel numeric serial (may come as string after raw:false) */
-  const num=Number(s);
-  if(!isNaN(num)&&num>1&&num<100000){
-    /* Excel serial: days since 1900-01-00 (with Lotus 1-2-3 leap-year bug) */
-    const d=new Date(Math.round((num-25569)*86400*1000));
-    if(!isNaN(d.getTime())&&d.getFullYear()>1970)
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const s = String(val).trim();
+  // Already HH:MM or HH:MM:SS
+  const hms = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (hms) return hms[1].padStart(2,'0') + ':' + hms[2];
+  return s;
+}
+
+function xlFmtDate(val) {
+  if (!val) return null;
+  if (val instanceof Date) {
+    if (isNaN(val)) return null;
+    return val.getFullYear() + '-' + String(val.getMonth()+1).padStart(2,'0') + '-' + String(val.getDate()).padStart(2,'0');
   }
-  /* Natural language / other formats */
-  const d=new Date(s);
-  if(!isNaN(d.getTime())&&d.getFullYear()>1970)
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const s = String(val).trim().split(' ')[0]; // strip time if present
+  // YYYY-MM-DD
+  if (s.match(/^\d{4}-\d{2}-\d{2}$/)) return s;
+  // DD/MM/YYYY or DD-MM-YYYY
+  const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (dmy) { const y = dmy[3].length===2?'20'+dmy[3]:dmy[3]; return y+'-'+dmy[2].padStart(2,'0')+'-'+dmy[1].padStart(2,'0'); }
+  const d = new Date(s);
+  if (!isNaN(d)) return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   return null;
 }
 
-/* Parse a time-only cell → 'HH:MM'
-   Handles: 'HH:MM', 'HH:MM:SS', 'H:MM AM/PM', Excel decimal fraction strings like '0.4583' */
-function xlParseTime(val){
-  if(val===null||val===undefined||val==='')return null;
-  const s=String(val).trim();
-  if(!s)return null;
-  /* HH:MM or HH:MM:SS */
-  const hms=s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?(?:\s*(am|pm))?$/i);
-  if(hms){
-    let h=parseInt(hms[1]),m=parseInt(hms[2]);
-    const ampm=(hms[3]||'').toLowerCase();
-    if(ampm==='pm'&&h<12)h+=12;
-    if(ampm==='am'&&h===12)h=0;
-    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+// Find a column by possible names (case-insensitive)
+function xlCol(row, ...names) {
+  for (const name of names) {
+    for (const key of Object.keys(row)) {
+      if (key.trim().toUpperCase() === name.toUpperCase()) return row[key];
+    }
   }
-  /* Excel time fraction: 0.0–0.999... representing fraction of 24h */
-  const frac=parseFloat(s);
-  if(!isNaN(frac)&&frac>=0&&frac<1){
-    const totalMin=Math.round(frac*24*60);
-    const h=Math.floor(totalMin/60)%24;
-    const m=totalMin%60;
-    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  return '';
+}
+
+// Find column key by name
+function xlKey(headers, ...names) {
+  for (const name of names) {
+    for (const h of headers) {
+      if (h.trim().toUpperCase() === name.toUpperCase()) return h;
+    }
   }
   return null;
 }
 
-/* Combine a date string 'YYYY-MM-DD' and a time string 'HH:MM' → 'YYYY-MM-DD' (date only for checkin/checkout storage) */
-function xlCombineDateTime(dateStr,timeStr){
-  if(!dateStr)return null;
-  return dateStr; /* store date portion; time is kept in checkinTime/checkoutTime */
+function xlShowPreview(sheetName) {
+  document.getElementById('xlDropZone').style.display = 'none';
+
+  // Build column mapping display (your exact columns)
+  const colMap = [
+    { excel: '#',          field: 'Booking Ref #' },
+    { excel: 'NO',         field: 'Room No.' },
+    { excel: 'NAME / col3',field: 'Guest Name' },
+    { excel: 'CONTACT NO', field: 'Phone Number' },
+    { excel: 'PERSON',     field: 'No. of Guests' },
+    { excel: 'RENT',       field: 'Total Rent (₹)' },
+    { excel: 'CASH',       field: 'Cash Payment (₹)' },
+    { excel: 'PENDING',    field: 'Pending Amount (₹)' },
+    { excel: 'BANK',       field: 'Bank/UPI Payment (₹)' },
+    { excel: 'DATE',       field: 'Booking Date' },
+    { excel: 'TIME',       field: 'Duration' },
+    { excel: 'C/IN',       field: 'Check-in Time' },
+    { excel: 'C/OUT',      field: 'Check-out Time' },
+  ];
+
+  const grid = document.getElementById('xlMappingGrid');
+  grid.innerHTML = `
+    <div style="grid-column:1/-1;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 14px;font-size:12px;color:#166534;margin-bottom:4px;">
+      ✅ <strong>${_xlRows.length} bookings</strong> found in sheet <strong>"${sheetName}"</strong>. Columns detected and auto-mapped below.
+    </div>
+    ${colMap.map(c => `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#fafaf8;border:1px solid var(--border);border-radius:6px;font-size:12px;">
+        <span style="font-family:monospace;color:var(--gold);font-weight:600;min-width:80px;">${c.excel}</span>
+        <span style="color:var(--lighter);">→</span>
+        <span style="color:var(--dark);">${c.field}</span>
+      </div>`).join('')}
+    <div style="grid-column:1/-1;margin-top:8px;">
+      <div style="font-size:11px;font-weight:600;color:var(--dark);margin-bottom:6px;">Preview (first 4 rows):</div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:10px;">
+          <thead><tr>${_xlHeaders.map(h=>`<th style="padding:3px 6px;background:#f5f5f0;border:1px solid #e0ddd5;white-space:nowrap;">${h||'—'}</th>`).join('')}</tr></thead>
+          <tbody>${_xlRows.slice(0,4).map(r=>`<tr>${_xlHeaders.map(h=>{
+            let v = r[h]; if(v instanceof Date) v=v.toLocaleDateString('en-IN'); else v=String(v??'');
+            return `<td style="padding:3px 6px;border:1px solid #e0ddd5;white-space:nowrap;">${v||'—'}</td>`;
+          }).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  document.getElementById('xlMappingSection').style.display = 'block';
 }
 
-function xlMapPayment(cash,bank,pending){
-  /* Determine payment mode from the three money columns */
-  const c=parseFloat(String(cash||'').replace(/[^0-9.]/g,''))||0;
-  const b=parseFloat(String(bank||'').replace(/[^0-9.]/g,''))||0;
-  const p=parseFloat(String(pending||'').replace(/[^0-9.]/g,''))||0;
-  if(c>0&&b>0)return'split';
-  if(b>0)return'bank';
-  if(c>0)return'cash';
-  if(p>0)return'pending';
-  return'pending';
+async function xlStartImport() {
+  setBtnLoading('xlImportBtn', true);
+  document.getElementById('xlMappingSection').style.display  = 'none';
+  document.getElementById('xlProgressSection').style.display = 'block';
+
+  let imported = 0, skipped = 0, failed = 0;
+  const validBookings = [];
+
+  // Detect which column index has the NAME (3rd column after # and NO)
+  // Headers can be: ['#','NO','CONTACT NO','CONTACT NO','PERSON',...]
+  // Name is the 3rd column (index 2) — check if it looks like a name col
+  const nameKeys = _xlHeaders.filter((h, i) => i === 2); // 3rd column = NAME
+
+  for (const row of _xlRows) {
+    try {
+      // ── Extract each field using exact column names ──
+      const srNo    = String(xlCol(row, '#') || '').trim();
+      const roomNo  = String(xlCol(row, 'NO') || '').trim();
+
+      // Guest name is always 3rd column (index 2) — may be unnamed/duplicate
+      const nameKey = _xlHeaders[2] || '';
+      const name    = String(row[nameKey] || '').trim();
+
+      // Phone — 4th column (index 3), also named CONTACT NO
+      const phoneKey = _xlHeaders[3] || '';
+      const phone   = String(row[phoneKey] || '').trim();
+
+      const persons = String(xlCol(row, 'PERSON') || '1').trim();
+      const rent    = parseFloat(String(xlCol(row, 'RENT')    || '0').replace(/[^0-9.]/g,'')) || 0;
+      const cash    = parseFloat(String(xlCol(row, 'CASH')    || '0').replace(/[^0-9.]/g,'')) || 0;
+      const pending = parseFloat(String(xlCol(row, 'PENDING') || '0').replace(/[^0-9.]/g,'')) || 0;
+      const bank    = parseFloat(String(xlCol(row, 'BANK')    || '0').replace(/[^0-9.]/g,'')) || 0;
+      const res     = String(xlCol(row, 'RES') || '').trim();
+      const dateVal = xlCol(row, 'DATE');
+      const timeVal = String(xlCol(row, 'TIME') || '').trim(); // duration e.g. "2hr", "12HR"
+      const cinVal  = xlCol(row, 'C/IN');
+      const coutVal = xlCol(row, 'C/OUT');
+
+      // Skip rows without a name
+      if (!name || name === '' || name === 'nan') { skipped++; continue; }
+
+      // ── Dates ──
+      const bookingDate = xlFmtDate(dateVal);
+      const cinTime     = xlFmtTime(cinVal);   // e.g. "10:00"
+      const coutTime    = xlFmtTime(coutVal);  // e.g. "15:55"
+
+      // Use booking date as check-in date (same day for short stays)
+      const checkin  = bookingDate || new Date().toISOString().split('T')[0];
+      // For checkout: if cout time < cin time → next day; else same day
+      let checkout = checkin;
+      if (cinTime && coutTime && coutTime < cinTime) {
+        // next day
+        const d = new Date(checkin + 'T00:00:00');
+        d.setDate(d.getDate() + 1);
+        checkout = d.toISOString().split('T')[0];
+      }
+
+      // ── Payment ──
+      const amountReceived = cash + bank; // total collected
+      const paymentMode    = cash > 0 && bank > 0 ? 'cash+bank' : cash > 0 ? 'cash' : bank > 0 ? 'bank' : pending > 0 ? 'pending' : 'pending';
+
+      // ── New FH- ID ──
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let newId = 'FH-';
+      for (let i = 0; i < 5; i++) newId += chars[Math.floor(Math.random() * chars.length)];
+
+      const paxNum  = parseInt(persons) || 1;
+      const guests  = paxNum > 1 ? paxNum + ' Guests' : '1 Guest';
+
+      validBookings.push({
+        id:              newId,
+        origBookingRef:  srNo || null,           // original # from your Excel
+        name:            sanitize(name),
+        phone:           sanitize(phone),
+        email:           '',
+        room:            sanitize(roomNo),        // Room NO. column
+        roomType:        'regular',
+        guests,
+        checkin,
+        checkinTime:     cinTime,                 // actual time e.g. "10:00"
+        checkout,
+        checkoutTime:    coutTime,                // actual time e.g. "15:55"
+        duration:        sanitize(timeVal),       // "2hr", "12HR" etc.
+        idType:          '',
+        idNum:           '',
+        requests:        res ? sanitize(res) : '',
+        status:          'checkedout',
+        amountReceived:  amountReceived || null,
+        rentAmount:      rent || null,
+        cashAmount:      cash || null,
+        bankAmount:      bank || null,
+        pendingAmount:   pending || null,
+        paymentMode,
+        amountEnteredBy: 'Excel Import',
+        amountEnteredAt: new Date().toISOString(),
+        source:          'excel_import',
+        importedAt:      new Date().toISOString(),
+        bookingDate:     bookingDate,
+        createdAt:       bookingDate || new Date().toISOString(),
+        idPhotoUrl:      null,
+        idPhotoUrls:     [],
+      });
+    } catch(e) {
+      console.warn('Row error:', e, row);
+      failed++;
+    }
+  }
+
+  if (!validBookings.length) {
+    document.getElementById('xlProgressSection').style.display = 'none';
+    document.getElementById('xlResultSection').style.display   = 'block';
+    document.getElementById('xlResultIcon').textContent  = '⚠️';
+    document.getElementById('xlResultTitle').textContent = 'Nothing to import';
+    document.getElementById('xlResultDesc').textContent  = `All ${skipped} rows skipped — missing Guest Name.`;
+    setBtnLoading('xlImportBtn', false);
+    return;
+  }
+
+  // ── Write in batches of 20 ──
+  const BATCH = 20;
+  const batches = [];
+  for (let i = 0; i < validBookings.length; i += BATCH) batches.push(validBookings.slice(i, i + BATCH));
+
+  for (let b = 0; b < batches.length; b++) {
+    const pct = Math.round(((b * BATCH) / validBookings.length) * 100);
+    document.getElementById('xlProgressBar').style.width   = pct + '%';
+    document.getElementById('xlProgressText').textContent  = `Saving ${Math.min((b+1)*BATCH, validBookings.length)} of ${validBookings.length}…`;
+    document.getElementById('xlProgressCount').textContent = `✅ ${imported} saved · ⏳ ${validBookings.length - (b*BATCH)} remaining · ⚠️ ${skipped} skipped`;
+    const results = await Promise.allSettled(batches[b].map(bk => fbCreateBooking(bk)));
+    results.forEach(r => r.status === 'fulfilled' ? imported++ : failed++);
+    if (b < batches.length - 1) await new Promise(r => setTimeout(r, 400));
+  }
+
+  document.getElementById('xlProgressBar').style.width   = '100%';
+  document.getElementById('xlProgressSection').style.display = 'none';
+  document.getElementById('xlResultSection').style.display   = 'block';
+  document.getElementById('xlResultIcon').textContent  = imported > 0 ? '✅' : '❌';
+  document.getElementById('xlResultTitle').textContent = 'Import Complete!';
+  document.getElementById('xlResultDesc').textContent  = `${imported} bookings imported · ${skipped} skipped (no name) · ${failed} failed`;
+
+  if (imported > 0) {
+    fbLogActivity('Excel Import', `${imported} bookings imported from Excel`);
+    toast(`✅ ${imported} bookings imported successfully!`, 'success', 6000);
+  }
+  setBtnLoading('xlImportBtn', false);
 }
-function xlGenFHId(origId){
-  const s=String(origId||'').trim();
-  if(s.match(/^FH-/i))return s.toUpperCase();
-  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let rand='';for(let i=0;i<5;i++)rand+=chars[Math.floor(Math.random()*chars.length)];
-  return'FH-'+rand;
-}
-async function xlStartImport(){
-  const map=xlGetMapping();
-  const missing=XL_FIELDS.filter(f=>f.required&&!map[f.key]).map(f=>f.label);
-  if(missing.length){toast('Map required fields: '+missing.join(', '),'error');return;}
-  setBtnLoading('xlImportBtn',true);
-  document.getElementById('xlMappingSection').style.display='none';
-  document.getElementById('xlProgressSection').style.display='block';
-  let imported=0,skipped=0,failed=0;
-  const validBookings=[];
-  for(const row of _xlRows){
-    /* ── Date: from DATE column ── */
-    const entryDate=xlParseDate(map.date?row[map.date]:null);
-    /* ── Times: C/IN and C/OUT ── */
-    const cinRaw=map.checkin?row[map.checkin]:null;
-    const coutRaw=map.checkout?row[map.checkout]:null;
-    const cinTime=xlParseTime(cinRaw);
-    const coutTime=xlParseTime(coutRaw);
-    /* The actual check-in date = entry date; check-out date = same day (short stay)
-       unless checkout time < checkin time → means it spilled past midnight → +1 day */
-    let checkinDate=entryDate;
-    let checkoutDate=entryDate;
-    if(cinTime&&coutTime&&checkinDate){
-      const [ch,cm]=cinTime.split(':').map(Number);
-      const [oh,om]=coutTime.split(':').map(Number);
-      if(oh*60+om < ch*60+cm){
-        /* Checkout is next day */
-        const d=new Date(checkinDate+'T00:00:00');
-        d.setDate(d.getDate()+1);
-        checkoutDate=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+
+/* ══════════════════════════════════════
+   DIGITAL SIGNATURE PAD
+══════════════════════════════════════ */
+(function() {
+  let _sigDrawing = false;
+  let _sigHasData = false;
+  let _sigMoved   = false;
+  let _sigCtx     = null;
+  let _sigCanvas  = null;
+  let _sigLastX   = 0, _sigLastY   = 0;
+
+  function _getSigCanvas() {
+    if (!_sigCanvas) {
+      _sigCanvas = document.getElementById('sigCanvas');
+      if (_sigCanvas) {
+        _sigCtx = _sigCanvas.getContext('2d');
+        _sigCtx.strokeStyle = '#1a1a1a';
+        _sigCtx.lineWidth   = 2.2;
+        _sigCtx.lineCap     = 'round';
+        _sigCtx.lineJoin    = 'round';
       }
     }
-    /* Guest name */
-    const name=map.name?String(row[map.name]||'').trim():'';
-    /* Skip rows without name or entry date */
-    if(!name||!checkinDate){skipped++;continue;}
-    /* If no time info at all, still import with date-only */
-    const checkin=checkinDate;
-    const checkout=checkoutDate||checkinDate;
-    /* Amount columns */
-    const rentRaw=map.amount?row[map.amount]:null;
-    const cashRaw=map.cash?row[map.cash]:null;
-    const bankRaw=map.bank?row[map.bank]:null;
-    const pendingRaw=map.pending?row[map.pending]:null;
-    const rentAmt=parseFloat(String(rentRaw||'').replace(/[^0-9.]/g,''))||0;
-    const cashAmt=parseFloat(String(cashRaw||'').replace(/[^0-9.]/g,''))||0;
-    const bankAmt=parseFloat(String(bankRaw||'').replace(/[^0-9.]/g,''))||0;
-    const pendAmt=parseFloat(String(pendingRaw||'').replace(/[^0-9.]/g,''))||0;
-    /* Total amount = rent (or cash+bank if rent is blank) */
-    const amount=rentAmt||(cashAmt+bankAmt)||null;
-    const amountReceived=(cashAmt+bankAmt)||rentAmt||null;
-    const payMode=xlMapPayment(cashRaw,bankRaw,pendingRaw);
-    const paxRaw=map.persons?String(row[map.persons]||'').trim():'';
-    const paxNum=parseInt(paxRaw)||1;
-    const guests=paxNum>1?paxNum+' Guests':'1 Guest';
-    const room=sanitize(map.room?String(row[map.room]||'').trim():'');
-    const duration=map.duration?String(row[map.duration]||'').trim():'';
-    const origId=map.origId?String(row[map.origId]||'').trim():'';
-    const newFHId=xlGenFHId(origId);
-    const phone=sanitize(map.phone?String(row[map.phone]||'').trim():'');
-    const createdAt=checkin+(cinTime?'T'+cinTime:'');
-    /* Build notes from duration + pending info */
-    let notes='';
-    if(duration)notes+=`Duration: ${duration}`;
-    if(pendAmt>0)notes+=(notes?', ':'')+`Pending: ₹${pendAmt}`;
-    validBookings.push({
-      id:newFHId,
-      origBookingRef:origId||null,
-      name:sanitize(name),
-      phone,
-      email:'',
-      checkin,
-      checkinTime:cinTime||'',
-      checkout,
-      checkoutTime:coutTime||'',
-      guests,
-      room,
-      roomType:'regular',
-      idType:'',idNum:'',
-      requests:(room?`Room No: ${room}`:'')+(notes?(room?' | ':'')+notes:''),
-      status:'checkedout',
-      amountReceived,
-      amountTotal:amount||null,
-      amountPending:pendAmt||null,
-      paymentMode:payMode,
-      amountEnteredBy:amount?'Excel Import':null,
-      amountEnteredAt:amount?new Date().toISOString():null,
-      source:'excel_import',
-      importedAt:new Date().toISOString(),
-      idPhotoUrl:null,idPhotoUrls:[],
-      createdAt
+    return _sigCanvas;
+  }
+
+  function _getPos(e, canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / rect.width;
+    const scaleY = canvas.height / rect.height;
+    if (e.touches) {
+      return {
+        x: (e.touches[0].clientX - rect.left) * scaleX,
+        y: (e.touches[0].clientY - rect.top)  * scaleY
+      };
+    }
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top)  * scaleY
+    };
+  }
+
+  window.sigStart = function(e) {
+    e.preventDefault();
+    const c = _getSigCanvas(); if (!c) return;
+    _sigDrawing = true;
+    _sigMoved   = false;   // track if finger actually moved
+    const pos = _getPos(e, c);
+    _sigLastX = pos.x; _sigLastY = pos.y;
+    _sigCtx.beginPath();
+    _sigCtx.moveTo(_sigLastX, _sigLastY);
+    const ph = document.getElementById('sigPlaceholder');
+    if (ph) ph.style.display = 'none';
+  };
+
+  window.sigMove = function(e) {
+    if (!_sigDrawing) return;
+    e.preventDefault();
+    const c = _getSigCanvas(); if (!c) return;
+    const pos = _getPos(e, c);
+    // Only draw if moved more than 1px (avoids jitter registering as lines)
+    const dx = pos.x - _sigLastX, dy = pos.y - _sigLastY;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    _sigMoved = true;
+    _sigCtx.lineTo(pos.x, pos.y);
+    _sigCtx.stroke();
+    _sigCtx.beginPath();
+    _sigCtx.moveTo(pos.x, pos.y);
+    _sigLastX = pos.x; _sigLastY = pos.y;
+    _sigHasData = true;
+  };
+
+  window.sigEnd = function() {
+    _sigDrawing = false;
+    // If finger never moved → it was a TAP → draw a filled dot
+    if (!_sigMoved && _sigCtx) {
+      _sigCtx.beginPath();
+      _sigCtx.arc(_sigLastX, _sigLastY, _sigCtx.lineWidth * 1.1, 0, Math.PI * 2);
+      _sigCtx.fillStyle = _sigCtx.strokeStyle || '#1a1a1a';
+      _sigCtx.fill();
+      _sigCtx.beginPath();
+      _sigHasData = true;
+    }
+    if (_sigCtx) { _sigCtx.beginPath(); }
+    const errEl = document.getElementById('sigErr');
+    if (errEl) errEl.classList.remove('show');
+  };
+
+  window.sigClear = function() {
+    const c = _getSigCanvas(); if (!c) return;
+    _sigCtx.clearRect(0, 0, c.width, c.height);
+    _sigHasData = false;
+    const ph = document.getElementById('sigPlaceholder');
+    if (ph) ph.style.display = 'flex';
+  };
+
+  window.sigGetDataUrl = function() {
+    const c = _getSigCanvas(); if (!c) return null;
+    return _sigHasData ? c.toDataURL('image/png') : null;
+  };
+
+  window.sigHasSignature = function() { return _sigHasData; };
+
+  // Reset signature when booking modal closes
+  const _origCloseModal = window.closeModal;
+  window.closeModal = function(id) {
+    if (id === 'bookingModal' || id === 'reserveModal') {
+      window.sigClear();
+    }
+    if (_origCloseModal) _origCloseModal(id);
+  };
+})();
+
+
+/* ══════════════════════════════════════
+   ROOM ASSIGNMENT
+══════════════════════════════════════ */
+function openRoomAssign(docId, currentRoom, currentType) {
+  window._raDocId = docId;
+  const roomNoEl   = document.getElementById('raRoomNo');
+  const roomTypeEl = document.getElementById('raRoomType');
+  const errEl      = document.getElementById('raErr');
+  if (roomNoEl)   roomNoEl.value   = currentRoom  || '';
+  if (roomTypeEl) roomTypeEl.value = currentType  || 'regular';
+  if (errEl)      errEl.style.display = 'none';
+  // Don't close detailModal here — it's closed by the caller (mkBtn click)
+  openModal('roomAssignModal');
+  setTimeout(() => roomNoEl?.focus(), 200);
+}
+
+async function saveRoomAssign() {
+  const docId    = window._raDocId;
+  const roomNo   = (document.getElementById('raRoomNo')?.value   || '').trim();
+  const roomType = (document.getElementById('raRoomType')?.value || 'regular');
+  const errEl    = document.getElementById('raErr');
+  if (errEl) errEl.style.display = 'none';
+
+  if (!roomNo) {
+    if (errEl) { errEl.textContent = 'Please enter a room number.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  setBtnLoading('raSubmitBtn', true);
+  try {
+    await fbUpdateBooking(docId, {
+      room:     sanitize(roomNo),
+      roomType: roomType,
+      roomAssignedBy: window._currentUser?.name || window._currentUser?.email || 'Staff',
+      roomAssignedAt: new Date().toISOString(),
     });
+    await fbLogActivity('room_assign', `Room ${roomNo} (${roomType}) assigned to booking by ${window._currentUser?.name || 'Staff'}`);
+    closeModal('roomAssignModal');
+    toast(`✅ Room ${roomNo} assigned successfully!`, 'success');
+  } catch(e) {
+    if (errEl) { errEl.textContent = 'Failed to save. Try again.'; errEl.style.display = 'block'; }
+    console.error('saveRoomAssign:', e);
   }
-  if(!validBookings.length){
-    document.getElementById('xlProgressSection').style.display='none';
-    document.getElementById('xlResultSection').style.display='block';
-    document.getElementById('xlResultIcon').textContent='⚠️';
-    document.getElementById('xlResultTitle').textContent='Nothing to import';
-    document.getElementById('xlResultDesc').textContent=`All ${skipped} rows skipped — missing Guest Name or Date.`;
-    setBtnLoading('xlImportBtn',false);return;
-  }
-  const BATCH=20;const batches=[];
-  for(let i=0;i<validBookings.length;i+=BATCH)batches.push(validBookings.slice(i,i+BATCH));
-  for(let b=0;b<batches.length;b++){
-    const pct=Math.round(((b*BATCH)/validBookings.length)*100);
-    document.getElementById('xlProgressBar').style.width=pct+'%';
-    document.getElementById('xlProgressText').textContent=`Saving batch ${b+1} of ${batches.length}…`;
-    document.getElementById('xlProgressCount').textContent=`✅ ${imported} saved · ⏳ ${validBookings.length-(b*BATCH)} left · ⚠️ ${skipped} skipped`;
-    const results=await Promise.allSettled(batches[b].map(bk=>fbCreateBooking(bk)));
-    results.forEach(r=>r.status==='fulfilled'?imported++:failed++);
-    if(b<batches.length-1)await new Promise(r=>setTimeout(r,500));
-  }
-  document.getElementById('xlProgressBar').style.width='100%';
-  document.getElementById('xlProgressSection').style.display='none';
-  document.getElementById('xlResultSection').style.display='block';
-  document.getElementById('xlResultIcon').textContent=imported>0?'✅':'⚠️';
-  document.getElementById('xlResultTitle').textContent='Import Complete!';
-  document.getElementById('xlResultDesc').textContent=`${imported} imported · ${skipped} skipped · ${failed} failed`;
-  if(imported>0){fbLogActivity('Excel Import',`${imported} bookings imported`);toast(`✅ ${imported} bookings imported!`,'success',5000);}
-  setBtnLoading('xlImportBtn',false);
+  setBtnLoading('raSubmitBtn', false);
 }
 
 </script>
@@ -3820,7 +4257,7 @@ async function xlStartImport(){
   <div class="modal-box wide" style="max-width:680px;">
     <button class="modal-close" onclick="closeModal('excelImportModal')" aria-label="Close">✕</button>
     <h2 class="modal-h">📂 Import Old Bookings from Excel</h2>
-    <p class="modal-sub">Drag & drop your <strong>.xlsx / .xls</strong> file. Supports your format: <strong>#, NO, CONTACT NO, PERSON, RENT, CASH, PENDING, BANK, DATE, TIME, C/IN, C/OUT</strong>. All columns will be auto-detected.</p>
+    <p class="modal-sub">Drag & drop your <strong>.xlsx / .xls</strong> file. Columns: Guest Name, Phone, Person, No. (Room), Check-in, Check-out, Amount, Mode of Payment, Date, Time.</p>
     <div id="xlDropZone" style="border:2px dashed var(--gold);border-radius:12px;padding:40px 20px;text-align:center;cursor:pointer;background:var(--gold-pale);margin:18px 0;"
       ondragover="xlDragOver(event)" ondragleave="xlDragLeave(event)" ondrop="xlDrop(event)"
       onclick="document.getElementById('xlFileInput').click()">
@@ -3848,6 +4285,37 @@ async function xlStartImport(){
       <div style="font-size:16px;font-weight:600;margin-bottom:6px;" id="xlResultTitle"></div>
       <div style="font-size:13px;color:var(--light);margin-bottom:18px;" id="xlResultDesc"></div>
       <button class="btn btn-gold" onclick="closeModal('excelImportModal');switchTab('bookings')">Done — View Bookings</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ROOM ASSIGN MODAL -->
+<div class="modal-wrap" id="roomAssignModal" role="dialog" aria-modal="true">
+  <div class="modal-box" style="max-width:380px;">
+    <button class="modal-close" onclick="closeModal('roomAssignModal')" aria-label="Close">✕</button>
+    <h2 class="modal-h">🚪 Assign Room</h2>
+    <p class="modal-sub">Update the room number or type for this booking.</p>
+    <div class="fg">
+      <label>Room Type</label>
+      <select id="raRoomType" style="font-size:14px;padding:10px;">
+        <option value="regular">Regular Room</option>
+        <option value="dormitory">Dormitory Bed</option>
+        <option value="suite">Suite</option>
+        <option value="deluxe">Deluxe Room</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Room No. / Bed No.</label>
+      <input type="text" id="raRoomNo" placeholder="e.g. 101, 204, Bed-3, A-2" maxlength="30"
+        style="font-size:16px;padding:12px;letter-spacing:.05em;"/>
+    </div>
+    <div class="fg-err" id="raErr" style="display:none;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:10px;margin-top:4px;">
+      <button class="btn btn-gold" id="raSubmitBtn" onclick="saveRoomAssign()">
+        <span class="btn-text">💾 Save Room</span>
+      </button>
+      <button class="act" onclick="closeModal('roomAssignModal')">Cancel</button>
     </div>
   </div>
 </div>
